@@ -1,6 +1,6 @@
 [submodule "c/include/BFL"]
 	path = c/include/BFL
-	url = git@github.com:SrVariable/BFL.git
+	url = https://github.com/SrVariable/BFL
 [submodule "c/include/MLX42"]
 	path = c/include/MLX42
 	url = https://github.com/42-Fundacion-Telefonica/MLX42

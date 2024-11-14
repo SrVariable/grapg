@@ -13,7 +13,6 @@
 // - I also kinda understand how mlx images work now
 //
 // @TODO:
-// - Implement color struct
 // - Think a way to have an image and put it into another image.
 // For example: I load a Chopper.png with mlx_load_png, then convert the
 // texture as an image, then put the pixels of Chopper wherever I want to in
@@ -27,12 +26,35 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+typedef union
+{
+	struct
+	{
+		uint8_t	a;
+		uint8_t	b;
+		uint8_t	g;
+		uint8_t	r;
+	};
+	uint32_t	hex;
+	uint8_t		data[4];
+}				Color;
+
+#define WHITE ((Color){.r = 255, .g = 255, .b = 255, .a = 255})
+#define BLACK ((Color){.r = 0, .g = 0, .b = 0, .a = 255})
+#define RED ((Color){.r = 255, .g = 0, .b = 0, .a = 255})
+#define GREEN ((Color){.r = 0, .g = 255, .b = 0, .a = 255})
+#define BLUE ((Color){.r = 0, .g = 0, .b = 255, .a = 255})
+#define LIGHT_RED ((Color){.r = 255, .g = 127, .b = 127, .a = 255})
+#define LIGHT_GREEN ((Color){.r = 127, .g = 255, .b = 127, .a = 255})
+#define LIGHT_BLUE ((Color){.r = 127, .g = 127, .b = 255, .a = 255})
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define TITLE "Raycasting"
 #define PIXEL_SIZE 64
-#define PLAYER_COLOR 0xFF0000FF
+#define PLAYER_COLOR LIGHT_BLUE
 
 typedef struct
 {
@@ -65,6 +87,17 @@ typedef struct
 	Map		map;
 	Mouse	mouse;
 }				Info;
+
+void	custom_put_pixel(mlx_image_t *img, int x, int y, Color color)
+{
+	uint8_t	*pixel;
+
+	pixel = &img->pixels[(y * img->width + x) * sizeof(int)];
+	pixel[0] = color.r;
+	pixel[1] = color.g;
+	pixel[2] = color.b;
+	pixel[3] = color.a;
+}
 
 void	hook_close_window(void *param)
 {
@@ -303,7 +336,8 @@ void	draw_player(void *param)
 			// @TODO:
 			// Now that I kinda understand how the image works,
 			// I might need to replace this
-			mlx_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
+			//mlx_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
+			custom_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
 		}
 	}
 }

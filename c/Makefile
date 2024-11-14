@@ -1,9 +1,14 @@
+#CFLAGS := -Wall -Wextra -Werror
 CPPFLAGS := -I ./include/MLX42/include/MLX42 -I ./include/BFL/include
 LDFLAGS := -L ./include/BFL -L ./include/MLX42/build/
 LDLIBS := -lBFL -lmlx42 -lglfw -pthread -lm -ldl
 
+raycasting: bfl mlx
+	clang -o ./raycasting/raycasting $(CFLAGS) -g ./raycasting/main.c $(CPPFLAGS) $(LDFLAGS) $(LDLIBS)
+	./raycasting/raycasting
+
 animation: bfl mlx
-	clang -o ./animation/animation -Wall -Wextra -Werror -g ./animation/main.c $(CPPFLAGS) $(LDFLAGS) $(LDLIBS)
+	clang -o ./animation/animation $(CFLAGS) -g ./animation/main.c $(CPPFLAGS) $(LDFLAGS) $(LDLIBS)
 	./animation/animation
 
 bfl:
@@ -17,7 +22,8 @@ mlx:
 
 clean:
 	rm -f animation/animation
+	rm -f raycasting/raycasting
 	make fclean -C ./include/BFL
 	make clean -C ./include/MLX42/build
 
-.PHONY: animation bfl mlx clean
+.PHONY: animation raycasting bfl mlx clean

@@ -13,10 +13,10 @@
 // - I also kinda understand how mlx images work now
 //
 // @TODO:
-// - Think a way to have an image and put it into another image.
-// For example: I load a Chopper.png with mlx_load_png, then convert the
-// texture as an image, then put the pixels of Chopper wherever I want to in
-// back_buffer, which will be later copied into screen
+// - Refactor function image_to_back_buffer: After 2 hours I managed to do it
+// LOL, however I need to refactor it because it's so hardcoded that it doesn't
+// work properly if I use another PIXEL_SIZE. Bounds are ok, image is not.
+// The main issue is in the loop, but I need to figure out the reason.
 // - Implement raycasting???
 
 #include "MLX42.h"
@@ -46,15 +46,20 @@ typedef union
 #define RED ((Color){.r = 255, .g = 0, .b = 0, .a = 255})
 #define GREEN ((Color){.r = 0, .g = 255, .b = 0, .a = 255})
 #define BLUE ((Color){.r = 0, .g = 0, .b = 255, .a = 255})
-#define LIGHT_RED ((Color){.r = 255, .g = 127, .b = 127, .a = 255})
-#define LIGHT_GREEN ((Color){.r = 127, .g = 255, .b = 127, .a = 255})
-#define LIGHT_BLUE ((Color){.r = 127, .g = 127, .b = 255, .a = 255})
+#define YELLOW ((Color){.r = 255, .g = 255, .b = 0, .a = 255})
+#define LIGHTRED ((Color){.r = 255, .g = 127, .b = 127, .a = 255})
+#define LIGHTGREEN ((Color){.r = 127, .g = 255, .b = 127, .a = 255})
+#define LIGHTBLUE ((Color){.r = 127, .g = 127, .b = 255, .a = 255})
+#define LIGHTYELLOW ((Color){.r = 255, .g = 255, .b = 127, .a = 255})
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define TITLE "Raycasting"
-#define PIXEL_SIZE 64
-#define PLAYER_COLOR LIGHT_BLUE
+#define PIXEL_SIZE 32
+#define PLAYER_COLOR LIGHTRED
+
+#define MAP_PATH "raycasting/.map"
+#define PNG_PATH "sprites/Chopper.png"
 
 typedef struct
 {
@@ -81,11 +86,12 @@ typedef struct
 
 typedef struct
 {
-	mlx_t	*mlx;
-	bool	is_mlx_set;
-	Player	player;
-	Map		map;
-	Mouse	mouse;
+	mlx_t		*mlx;
+	bool		is_mlx_set;
+	Player		player;
+	Map			map;
+	Mouse		mouse;
+	mlx_image_t	*img;
 }				Info;
 
 void	custom_put_pixel(mlx_image_t *img, int x, int y, Color color)
@@ -163,7 +169,7 @@ int	setup_map(Info *info, Map *map)
 
 	if (create_screen(info, map) != 0)
 		return (1);
-	fd = open("raycasting/.map", O_RDONLY);
+	fd = open(MAP_PATH, O_RDONLY);
 	if (fd < 0)
 		return (2);
 	bytes_read = read(fd, buff, sizeof(buff));
@@ -200,6 +206,23 @@ void	setup_mouse(mlx_t *mlx, Mouse *mouse)
 	mouse->old_y = WINDOW_HEIGHT * 0.5;
 }
 
+int	setup_image(Info *info)
+{
+	mlx_texture_t	*tex;
+	mlx_image_t		*img;
+
+	tex = mlx_load_png(PNG_PATH);
+	if (!tex)
+		return (1);
+	info->img = mlx_texture_to_image(info->mlx, tex);
+	mlx_delete_texture(tex);
+	if (!info->img)
+		return (2);
+	if (!mlx_resize_image(info->img, PIXEL_SIZE, PIXEL_SIZE))
+		return (3);
+	return (0);
+}
+
 int	setup_info(Info *info)
 {
 	info->is_mlx_set = false;
@@ -211,85 +234,13 @@ int	setup_info(Info *info)
 		return (2);
 	if (setup_player(&info->map, &info->player) != 0)
 		return (3);
+	if (setup_image(info) != 0)
+		return (4);
 	setup_mouse(info->mlx, &info->mouse);
 	return (0);
 }
 
-#define ENABLE 0
-#if ENABLE
-
-void	raycasting(void *param)
-{
-	Info		*info;
-	mlx_image_t	*back_buffer;
-	mlx_image_t	*screen;
-
-	info = param;
-	screen = info->map.screen;
-	back_buffer = info->map.back_buffer;
-	memcpy(screen->pixels, back_buffer->pixels, sizeof(int) * screen->width * screen->height);
-}
-
-void	change_buff(void *param)
-{
-	Info	*info = param;
-	mlx_image_t	*back_buffer = info->map.back_buffer;
-	static int j = 0;
-
-	for (int i = 0; i < back_buffer->height * 0.3; ++i)
-	{
-		mlx_put_pixel(back_buffer, j, i, 0x0000FFFF);
-	}
-	if (++j == back_buffer->width)
-	{
-		j = 0;
-		memset(back_buffer->pixels, 255, sizeof(int) * back_buffer->width * back_buffer->height);
-	}
-}
-
-void	change_buff2(void *param)
-{
-	Info	*info = param;
-	mlx_image_t	*back_buffer = info->map.back_buffer;
-	static int j = 0;
-
-	if (j < back_buffer->width * 0.6)
-	{
-		for (int i = back_buffer->height * 0.3; i < back_buffer->height * 0.6; ++i)
-		{
-			mlx_put_pixel(back_buffer, j, i, 0x00FF00FF);
-		}
-	}
-	if (++j == back_buffer->width)
-	{
-		j = 0;
-		memset(back_buffer->pixels, 255, sizeof(int) * back_buffer->width * back_buffer->height);
-	}
-}
-
-void	change_buff3(void *param)
-{
-	Info	*info = param;
-	mlx_image_t	*back_buffer = info->map.back_buffer;
-	static int j = 0;
-
-	if (j < back_buffer->width * 0.3)
-	{
-		for (int i = back_buffer->height * 0.6; i < back_buffer->height; ++i)
-		{
-			mlx_put_pixel(back_buffer, j, i, 0xFF0000FF);
-		}
-	}
-	if (++j == back_buffer->width)
-	{
-		j = 0;
-		memset(back_buffer->pixels, 255, sizeof(int) * back_buffer->width * back_buffer->height);
-	}
-}
-
-#else
-
-void	raycasting(void *param)
+void	start_drawing(void *param)
 {
 	Info		*info;
 	mlx_image_t	*back_buffer;
@@ -333,10 +284,6 @@ void	draw_player(void *param)
 	{
 		for (int j = y; j < y + PIXEL_SIZE; ++j)
 		{
-			// @TODO:
-			// Now that I kinda understand how the image works,
-			// I might need to replace this
-			//mlx_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
 			custom_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
 		}
 	}
@@ -350,7 +297,7 @@ void	handle_player(void *param)
 
 	info = param;
 	player = &info->player;
-	speed = 6 * info->mlx->delta_time;
+	speed = 1;//6 * info->mlx->delta_time;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT_SHIFT))
 		speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
@@ -360,7 +307,9 @@ void	handle_player(void *param)
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
 		player->y -= speed;
 	else if (mlx_is_key_down(info->mlx, MLX_KEY_D))
-		player->y += speed;
+		player->y += 1;
+	info->img->instances[0].x = (int)player->y * PIXEL_SIZE;
+	info->img->instances[0].y = (int)player->x * PIXEL_SIZE;
 }
 
 void	test(mlx_key_data_t keydata, void *param)
@@ -374,6 +323,11 @@ void	test(mlx_key_data_t keydata, void *param)
 	{
 		hidden = !hidden;
 	}
+	if (keydata.action == MLX_PRESS && keydata.key == MLX_KEY_PERIOD)
+	{
+		info->player.x = 0;
+		info->player.y = 0;
+	}
 	if (hidden)
 	{
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_HIDDEN);
@@ -381,46 +335,59 @@ void	test(mlx_key_data_t keydata, void *param)
 	}
 	else
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_NORMAL);
-	if (keydata.key == MLX_KEY_P)
-	{
-		int count = 0;
-		for (int i = 0; i < (sizeof(int) * info->map.screen->width * info->map.screen->height); ++i)
-		{
-			// Filtering the indexes where the player is
-			// If the player has the same color as the background, which
-			// white, this won't do anything
-			if (info->map.back_buffer->pixels[i] != 255 && i % 4 == 0
-				|| info->map.back_buffer->pixels[i] != 255 && i % 4 == 1
-				|| info->map.back_buffer->pixels[i] != 255 && i % 4 == 2
-				|| info->map.back_buffer->pixels[i] != 255 && i % 4 == 3)
-			{
-				printf("R component at %d: %d\n", i, info->map.back_buffer->pixels[i]); // r
-				printf("G component at %d: %d\n", i + 1, info->map.back_buffer->pixels[i + 1]); // g
-				printf("B component at %d: %d\n", i + 2, info->map.back_buffer->pixels[i + 2]); // b
-				printf("A component at %d: %d\n", i + 3, info->map.back_buffer->pixels[i + 3]); // a
-				++count;
-			}
-		}
-		printf("%d\n", count); // The count is PIXEL_SIZE * PIXEL_SIZE
-	}
 }
 
-void	handle_mouse(void *param)
+// @TODO: After 2 hours I managed to do it LOL, however I need to refactor it
+// because it's so hardcoded that it doesn't work properly if I use another
+// PIXEL_SIZE. Bounds are ok, image is not.
+void	image_to_back_buffer(void *param)
 {
 	Info	*info;
-	Mouse	*mouse;
+	uint8_t	*src_pixel;
+	uint8_t	*dst_pixel;
 
 	info = param;
-	mouse = &info->mouse;
-	mlx_get_mouse_pos(info->mlx, &mouse->x, &mouse->y);
-	//if (mouse->y > mouse->old_y)
-	//	printf("Mouse moved to the right\n");
-	//else if (mouse->y < mouse->old_y)
-	//	printf("Mouse moved to the left\n");
-	//mlx_set_mouse_pos(info->mlx, mouse->old_x, mouse->old_y);
-}
+	src_pixel = &info->img->pixels[0];
+	dst_pixel = &info->map.back_buffer->pixels[0];
 
-#endif
+	// upper bounds
+	int	bound = PIXEL_SIZE * 4;
+	int	x = 800;
+	int	y = 25;
+	int	start = 0;
+	dst_pixel[(start + 0)] = 255;
+	dst_pixel[(start + 1)] = 255;
+	dst_pixel[(start + 2)] = 255;
+	dst_pixel[(start + 3)] = 255;
+	dst_pixel[(start + bound + 0)] = 255;
+	dst_pixel[(start + bound + 1)] = 255;
+	dst_pixel[(start + bound + 2)] = 255;
+	dst_pixel[(start + bound + 3)] = 255;
+
+	// lower bounds
+	int	bound2 = info->map.back_buffer->width * (PIXEL_SIZE - 1) * sizeof(int);
+	dst_pixel[(start + bound2 + 0)] = 255;
+	dst_pixel[(start + bound2 + 1)] = 255;
+	dst_pixel[(start + bound2 + 2)] = 255;
+	dst_pixel[(start + bound2 + 3)] = 255;
+	dst_pixel[(start + bound2 + bound + 0)] = 255;
+	dst_pixel[(start + bound2 + bound + 1)] = 255;
+	dst_pixel[(start + bound2 + bound + 2)] = 255;
+	dst_pixel[(start + bound2 + bound + 3)] = 255;
+
+	for (int k = 0; k < PIXEL_SIZE; ++k)
+	{
+		for (int j = k * bound; j < k * bound + bound; j += 4)
+		{
+			if (src_pixel[j + 3] == 0)
+				continue;
+			dst_pixel[y * k * bound - k * bound + j + 0] = src_pixel[j + 0];
+			dst_pixel[y * k * bound - k * bound + j + 1] = src_pixel[j + 1];
+			dst_pixel[y * k * bound - k * bound + j + 2] = src_pixel[j + 2];
+			dst_pixel[y * k * bound - k * bound + j + 3] = src_pixel[j + 3];
+		}
+	}
+}
 
 int	main(void)
 {
@@ -434,18 +401,13 @@ int	main(void)
 		return (1);
 	}
 	mlx_image_to_window(info.mlx, info.map.screen, 0, 0);
-#if ENABLE
-	mlx_loop_hook(info.mlx, change_buff, &info);
-	mlx_loop_hook(info.mlx, change_buff2, &info);
-	mlx_loop_hook(info.mlx, change_buff3, &info);
-#else
+	mlx_image_to_window(info.mlx, info.img, info.player.x * PIXEL_SIZE, info.player.y * PIXEL_SIZE);
 	mlx_loop_hook(info.mlx, handle_player, &info);
-	mlx_loop_hook(info.mlx, handle_mouse, &info);
 	mlx_key_hook(info.mlx, test, &info);
 	mlx_loop_hook(info.mlx, clear_background, &info);
 	mlx_loop_hook(info.mlx, draw_player, &info);
-#endif
-	mlx_loop_hook(info.mlx, raycasting, &info);
+	mlx_loop_hook(info.mlx, image_to_back_buffer, &info);
+	mlx_loop_hook(info.mlx, start_drawing, &info);
 	mlx_loop(info.mlx);
 	if (info.is_mlx_set)
 		mlx_terminate(info.mlx);

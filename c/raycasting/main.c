@@ -12,12 +12,13 @@
 //
 // - I also kinda understand how mlx images work now
 //
+// - Figured out how to do the image_to_back_buffer but trial and error
+//
 // @TODO:
-// - Refactor function image_to_back_buffer: After 2 hours I managed to do it
-// LOL, however I need to refactor it because it's so hardcoded that it doesn't
-// work properly if I use another PIXEL_SIZE. Bounds are ok, image is not.
-// The main issue is in the loop, but I need to figure out the reason.
+// - Create image_to_image based on image_to_back_buffer that accepts a position
+// so the image will be placed in that position
 // - Implement raycasting???
+// - Create a custom mlx_resize_image
 
 #include "MLX42.h"
 #include "stdbool.h"
@@ -55,11 +56,11 @@ typedef union
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define TITLE "Raycasting"
-#define PIXEL_SIZE 32
+#define PIXEL_SIZE 64
 #define PLAYER_COLOR LIGHTRED
 
 #define MAP_PATH "raycasting/.map"
-#define PNG_PATH "sprites/Chopper.png"
+#define PNG_PATH "sprites/cool.png"
 
 typedef struct
 {
@@ -218,8 +219,6 @@ int	setup_image(Info *info)
 	mlx_delete_texture(tex);
 	if (!info->img)
 		return (2);
-	if (!mlx_resize_image(info->img, PIXEL_SIZE, PIXEL_SIZE))
-		return (3);
 	return (0);
 }
 
@@ -297,7 +296,7 @@ void	handle_player(void *param)
 
 	info = param;
 	player = &info->player;
-	speed = 1;//6 * info->mlx->delta_time;
+	speed = 6 * info->mlx->delta_time;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT_SHIFT))
 		speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
@@ -307,9 +306,7 @@ void	handle_player(void *param)
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
 		player->y -= speed;
 	else if (mlx_is_key_down(info->mlx, MLX_KEY_D))
-		player->y += 1;
-	info->img->instances[0].x = (int)player->y * PIXEL_SIZE;
-	info->img->instances[0].y = (int)player->x * PIXEL_SIZE;
+		player->y += speed;
 }
 
 void	test(mlx_key_data_t keydata, void *param)
@@ -337,9 +334,6 @@ void	test(mlx_key_data_t keydata, void *param)
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_NORMAL);
 }
 
-// @TODO: After 2 hours I managed to do it LOL, however I need to refactor it
-// because it's so hardcoded that it doesn't work properly if I use another
-// PIXEL_SIZE. Bounds are ok, image is not.
 void	image_to_back_buffer(void *param)
 {
 	Info	*info;
@@ -350,41 +344,21 @@ void	image_to_back_buffer(void *param)
 	src_pixel = &info->img->pixels[0];
 	dst_pixel = &info->map.back_buffer->pixels[0];
 
-	// upper bounds
-	int	bound = PIXEL_SIZE * 4;
-	int	x = 800;
-	int	y = 25;
-	int	start = 0;
-	dst_pixel[(start + 0)] = 255;
-	dst_pixel[(start + 1)] = 255;
-	dst_pixel[(start + 2)] = 255;
-	dst_pixel[(start + 3)] = 255;
-	dst_pixel[(start + bound + 0)] = 255;
-	dst_pixel[(start + bound + 1)] = 255;
-	dst_pixel[(start + bound + 2)] = 255;
-	dst_pixel[(start + bound + 3)] = 255;
+	// These variables might need a rename
+	int	offset = info->img->width * 4;
+	double	width = 8.0 / info->img->width * 100;
 
-	// lower bounds
-	int	bound2 = info->map.back_buffer->width * (PIXEL_SIZE - 1) * sizeof(int);
-	dst_pixel[(start + bound2 + 0)] = 255;
-	dst_pixel[(start + bound2 + 1)] = 255;
-	dst_pixel[(start + bound2 + 2)] = 255;
-	dst_pixel[(start + bound2 + 3)] = 255;
-	dst_pixel[(start + bound2 + bound + 0)] = 255;
-	dst_pixel[(start + bound2 + bound + 1)] = 255;
-	dst_pixel[(start + bound2 + bound + 2)] = 255;
-	dst_pixel[(start + bound2 + bound + 3)] = 255;
-
-	for (int k = 0; k < PIXEL_SIZE; ++k)
+	for (int i = 0; i < info->img->height; ++i)
 	{
-		for (int j = k * bound; j < k * bound + bound; j += 4)
+		for (int j = i * offset; j < i * offset + offset; j += 4)
 		{
 			if (src_pixel[j + 3] == 0)
 				continue;
-			dst_pixel[y * k * bound - k * bound + j + 0] = src_pixel[j + 0];
-			dst_pixel[y * k * bound - k * bound + j + 1] = src_pixel[j + 1];
-			dst_pixel[y * k * bound - k * bound + j + 2] = src_pixel[j + 2];
-			dst_pixel[y * k * bound - k * bound + j + 3] = src_pixel[j + 3];
+			int	start = width * i * offset - i * offset + j;
+			dst_pixel[start + 0] = src_pixel[j + 0];
+			dst_pixel[start + 1] = src_pixel[j + 1];
+			dst_pixel[start + 2] = src_pixel[j + 2];
+			dst_pixel[start + 3] = src_pixel[j + 3];
 		}
 	}
 }
@@ -401,7 +375,6 @@ int	main(void)
 		return (1);
 	}
 	mlx_image_to_window(info.mlx, info.map.screen, 0, 0);
-	mlx_image_to_window(info.mlx, info.img, info.player.x * PIXEL_SIZE, info.player.y * PIXEL_SIZE);
 	mlx_loop_hook(info.mlx, handle_player, &info);
 	mlx_key_hook(info.mlx, test, &info);
 	mlx_loop_hook(info.mlx, clear_background, &info);

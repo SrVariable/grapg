@@ -3,20 +3,16 @@
 // - While creating this, I developed a simple MLX setup, so I can do more future
 // tests if I want to. https://gist.github.com/SrVariable/7444ae6961f40de6e6b46d5a5aeb2d06
 // By the way, it is norminette compliant.
-//
 // - Apparently, hooks passed to mlx_key_hook overwrite the previous one
-//
 // - I applied and grasped the concept of Back Buffer (https://en.wikipedia.org/wiki/Multiple_buffering)
 // I was familiar with the concept, however I didn't understand it completely until now.
 // The implementation might be wrong, but this is a test, so who cares (maybe my future me)
-//
 // - I also kinda understand how mlx images work now
-//
 // - Figured out how to do the image_to_back_buffer but trial and error
+// - After implementing image_to_image I think I could redo so_long way better,
+// but I'll do it in the future because there's no time :(
 //
 // @TODO:
-// - Create image_to_image based on image_to_back_buffer that accepts a position
-// so the image will be placed in that position
 // - Implement raycasting???
 // - Create a custom mlx_resize_image
 
@@ -60,7 +56,7 @@ typedef union
 #define PLAYER_COLOR LIGHTRED
 
 #define MAP_PATH "raycasting/.map"
-#define PNG_PATH "sprites/cool.png"
+#define SPRITE_PATH "sprites/"
 
 typedef struct
 {
@@ -75,6 +71,7 @@ typedef struct
 {
 	double	x;
 	double	y;
+	double	speed;
 }				Player;
 
 typedef struct
@@ -92,8 +89,18 @@ typedef struct
 	Player		player;
 	Map			map;
 	Mouse		mouse;
-	mlx_image_t	*img;
+	mlx_image_t	*img[2];
+	mlx_image_t	*render_img;
+	int			render_img_index;
+	int			render_img_count;
+	Color		bg_color;
 }				Info;
+
+// Learnt (and stole) this trick from here: https://youtu.be/1PMf3FrFGD4?t=6233
+int	proper_mod(int a, int b)
+{
+	return ((a % b + b) % b);
+}
 
 void	custom_put_pixel(mlx_image_t *img, int x, int y, Color color)
 {
@@ -182,13 +189,14 @@ int	setup_map(Info *info, Map *map)
 	return (0);
 }
 
-int	setup_player(Map *map, Player *player)
+int	setup_player(Info *info, Player *player)
 {
-	for (int i = 0; i < map->rows; ++i)
+	player->speed = 6 * info->mlx->delta_time;
+	for (int i = 0; i < info->map.rows; ++i)
 	{
-		for (int j = 0; j < map->cols && map->arr[i][j]; ++j)
+		for (int j = 0; j < info->map.cols && info->map.arr[i][j]; ++j)
 		{
-			if (map->arr[i][j] == 'P')
+			if (info->map.arr[i][j] == 'P')
 			{
 				player->x = i;
 				player->y = j;
@@ -207,18 +215,34 @@ void	setup_mouse(mlx_t *mlx, Mouse *mouse)
 	mouse->old_y = WINDOW_HEIGHT * 0.5;
 }
 
-int	setup_image(Info *info)
+mlx_image_t	*load_image(Info *info, const char *path)
 {
 	mlx_texture_t	*tex;
 	mlx_image_t		*img;
 
-	tex = mlx_load_png(PNG_PATH);
+	tex = mlx_load_png(path);
 	if (!tex)
-		return (1);
-	info->img = mlx_texture_to_image(info->mlx, tex);
+		return (NULL);
+	img = mlx_texture_to_image(info->mlx, tex);
 	mlx_delete_texture(tex);
-	if (!info->img)
-		return (2);
+	if (!img)
+		return (NULL);
+	return (img);
+}
+
+int	setup_image(Info *info)
+{
+	mlx_texture_t	*tex;
+
+	info->render_img_count = 0;
+	info->img[0] = load_image(info, SPRITE_PATH"/Chopper.png");
+	++info->render_img_count;
+	info->img[1] = load_image(info, SPRITE_PATH"/cool.png");
+	++info->render_img_count;
+	if (!info->img[0] || !info->img[1])
+		return (1);
+	info->render_img = info->img[0];
+	info->render_img_index = 0;
 	return (0);
 }
 
@@ -231,11 +255,12 @@ int	setup_info(Info *info)
 	info->is_mlx_set = true;
 	if (setup_map(info, &info->map) != 0)
 		return (2);
-	if (setup_player(&info->map, &info->player) != 0)
+	if (setup_player(info, &info->player) != 0)
 		return (3);
 	if (setup_image(info) != 0)
 		return (4);
 	setup_mouse(info->mlx, &info->mouse);
+	info->bg_color = (Color){.hex = 0x303030FF};
 	return (0);
 }
 
@@ -253,15 +278,15 @@ void	start_drawing(void *param)
 
 void	clear_background(void *param)
 {
-	Info *info;
+	Info	*info;
 
 	info = param;
 	for (int i = 0; i < sizeof(int) * info->map.back_buffer->width * info->map.back_buffer->height; i += 4)
 	{
-		info->map.back_buffer->pixels[i + 0] = 0x30;
-		info->map.back_buffer->pixels[i + 1] = 0x30;
-		info->map.back_buffer->pixels[i + 2] = 0x30;
-		info->map.back_buffer->pixels[i + 3] = 0xFF;
+		info->map.back_buffer->pixels[i + 0] = info->bg_color.r;
+		info->map.back_buffer->pixels[i + 1] = info->bg_color.g;
+		info->map.back_buffer->pixels[i + 2] = info->bg_color.b;
+		info->map.back_buffer->pixels[i + 3] = info->bg_color.a;
 	}
 }
 
@@ -274,16 +299,13 @@ void	draw_player(void *param)
 
 	info = param;
 	player = &info->player;
-	x = player->x * PIXEL_SIZE;
-	y = player->y * PIXEL_SIZE;
-	if (x < 0 || x + PIXEL_SIZE > WINDOW_HEIGHT
-		|| y < 0 || y + PIXEL_SIZE > WINDOW_WIDTH)
-		return ;
+	x = player->x;
+	y = player->y;
 	for (int i = x; i < x + PIXEL_SIZE; ++i)
 	{
 		for (int j = y; j < y + PIXEL_SIZE; ++j)
 		{
-			custom_put_pixel(info->map.back_buffer, j, i, PLAYER_COLOR);
+			custom_put_pixel(info->map.back_buffer, proper_mod(j, WINDOW_WIDTH), proper_mod(i, WINDOW_HEIGHT), PLAYER_COLOR);
 		}
 	}
 }
@@ -292,21 +314,20 @@ void	handle_player(void *param)
 {
 	Info	*info;
 	Player	*player;
-	double	speed;
 
 	info = param;
 	player = &info->player;
-	speed = 6 * info->mlx->delta_time;
+	player->speed = 100 * info->mlx->delta_time;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT_SHIFT))
-		speed *= 2;
+		player->speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
-		player->x -= speed;
+		player->x -= player->speed;
 	else if (mlx_is_key_down(info->mlx, MLX_KEY_S))
-		player->x += speed;
+		player->x += player->speed;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
-		player->y -= speed;
+		player->y -= player->speed;
 	else if (mlx_is_key_down(info->mlx, MLX_KEY_D))
-		player->y += speed;
+		player->y += player->speed;
 }
 
 void	test(mlx_key_data_t keydata, void *param)
@@ -322,8 +343,8 @@ void	test(mlx_key_data_t keydata, void *param)
 	}
 	if (keydata.action == MLX_PRESS && keydata.key == MLX_KEY_PERIOD)
 	{
-		info->player.x = 0;
-		info->player.y = 0;
+		info->render_img_index = (info->render_img_index + 1) % info->render_img_count;
+		info->render_img = info->img[info->render_img_index];
 	}
 	if (hidden)
 	{
@@ -334,33 +355,42 @@ void	test(mlx_key_data_t keydata, void *param)
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_NORMAL);
 }
 
-void	image_to_back_buffer(void *param)
+void	image_to_image(mlx_image_t	*dst, mlx_image_t *src, int x, int y)
 {
-	Info	*info;
 	uint8_t	*src_pixel;
 	uint8_t	*dst_pixel;
+	int		offset_x;
+	double	offset_y;
+	int		start;
 
-	info = param;
-	src_pixel = &info->img->pixels[0];
-	dst_pixel = &info->map.back_buffer->pixels[0];
-
-	// These variables might need a rename
-	int	offset = info->img->width * 4;
-	double	width = 8.0 / info->img->width * 100;
-
-	for (int i = 0; i < info->img->height; ++i)
+	x = proper_mod(x, dst->width);
+	y = proper_mod(y, dst->height);
+	src_pixel = &src->pixels[0];
+	dst_pixel = &dst->pixels[0];
+	offset_x = src->width * 4;
+	offset_y = 8.0 / src->width * 100;
+	for (int i = 0; i < src->height; ++i)
 	{
-		for (int j = i * offset; j < i * offset + offset; j += 4)
+		for (int j = i * offset_x; j < i * offset_x + offset_x; j += 4)
 		{
 			if (src_pixel[j + 3] == 0)
 				continue;
-			int	start = width * i * offset - i * offset + j;
+			start = offset_y * (i + y) * offset_x - i * offset_x + j + (x * 4);
+			start = proper_mod(start, dst->width * dst->height * sizeof(int));
 			dst_pixel[start + 0] = src_pixel[j + 0];
 			dst_pixel[start + 1] = src_pixel[j + 1];
 			dst_pixel[start + 2] = src_pixel[j + 2];
 			dst_pixel[start + 3] = src_pixel[j + 3];
 		}
 	}
+}
+
+void	image_to_back_buffer(void *param)
+{
+	Info	*info;
+
+	info = param;
+	image_to_image(info->map.back_buffer, info->render_img, info->player.y, info->player.x);
 }
 
 int	main(void)

@@ -32,6 +32,16 @@ typedef union
 {
 	struct
 	{
+		double	x;
+		double	y;
+	};
+	double	pos[2];
+}				V2;
+
+typedef union
+{
+	struct
+	{
 		uint8_t	a;
 		uint8_t	b;
 		uint8_t	g;
@@ -63,9 +73,10 @@ typedef union
 #define MAP_PATH "raycasting/.map"
 #define SPRITE_PATH "sprites/"
 
+#define ARR_SIZE 1024
 typedef struct
 {
-	char		arr[1024][1024];
+	char		arr[ARR_SIZE][ARR_SIZE];
 	int			cols;
 	int			rows;
 	mlx_image_t	*back_buffer;
@@ -152,7 +163,7 @@ void	fill_map(Map *map, ssize_t bytes_read, char *buff)
 			if (c > map->cols)
 				map->cols = c;
 			c = 0;
-			continue;
+			continue ;
 		}
 		map->arr[r][c] = buff[i];
 		++c;
@@ -173,7 +184,7 @@ int	create_screen(Info *info, Map *map)
 
 int	setup_map(Info *info, Map *map)
 {
-	char	buff[1024] = {0};
+	char	buff[ARR_SIZE * ARR_SIZE] = {0};
 	int		fd;
 	ssize_t	bytes_read;
 
@@ -324,21 +335,21 @@ void	handle_player(void *param)
 		player->speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
 		player->x -= player->speed;
-	else if (mlx_is_key_down(info->mlx, MLX_KEY_S))
+	if (mlx_is_key_down(info->mlx, MLX_KEY_S))
 		player->x += player->speed;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
 		player->y -= player->speed;
-	else if (mlx_is_key_down(info->mlx, MLX_KEY_D))
+	if (mlx_is_key_down(info->mlx, MLX_KEY_D))
 		player->y += player->speed;
 }
 
 void	test(mlx_key_data_t keydata, void *param)
 {
-	Info	*info;
-
-	info = param;
+	Info		*info;
 	static bool	hidden = true;
 	static bool	fullscreen = false;
+
+	info = param;
 	if (keydata.action == MLX_PRESS && keydata.key == MLX_KEY_C)
 	{
 		hidden = !hidden;
@@ -357,30 +368,29 @@ void	test(mlx_key_data_t keydata, void *param)
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_NORMAL);
 }
 
-void	image_to_image(mlx_image_t	*dst, mlx_image_t *src, int x, int y)
+void	image_to_image(mlx_image_t *dst, mlx_image_t *src, int x, int y)
 {
 	uint8_t	*src_pixel;
 	uint8_t	*dst_pixel;
-	int		offset_x;
-	double	offset_y;
+	V2		offset;
 	int		start;
 
 	x = proper_mod(x, dst->width);
 	y = proper_mod(y, dst->height);
 	src_pixel = &src->pixels[0];
 	dst_pixel = &dst->pixels[0];
-	offset_x = src->width * 4;
+	offset.x = src->width * 4;
 	if (src->width > dst->width)
-		offset_y = dst->width / src->width;
+		offset.y = dst->width / src->width;
 	else
-		offset_y = 1/((double)src->width / dst->width);
+		offset.y = 1 / ((double)src->width / dst->width);
 	for (int i = 0; i < src->height; ++i)
 	{
-		for (int j = i * offset_x; j < i * offset_x + offset_x; j += 4)
+		for (int j = i * offset.x; j < i * offset.x + offset.x; j += 4)
 		{
 			if (src_pixel[j + 3] == 0)
-				continue;
-			start = offset_y * (i + y) * offset_x - i * offset_x + j + (x * 4);
+				continue ;
+			start = offset.y * (i + y) * offset.x - i * offset.x + j + (x * 4);
 			start = proper_mod(start, dst->width * dst->height * sizeof(int));
 			memcpy(dst_pixel + start, src_pixel + j, 4);
 		}

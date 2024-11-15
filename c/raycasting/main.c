@@ -112,10 +112,7 @@ void	custom_put_pixel(mlx_image_t *img, int x, int y, Color color)
 	uint8_t	*pixel;
 
 	pixel = &img->pixels[(y * img->width + x) * sizeof(int)];
-	pixel[0] = color.r;
-	pixel[1] = color.g;
-	pixel[2] = color.b;
-	pixel[3] = color.a;
+	memcpy(pixel, color.data, 4);
 }
 
 void	hook_close_window(void *param)
@@ -385,10 +382,7 @@ void	image_to_image(mlx_image_t	*dst, mlx_image_t *src, int x, int y)
 				continue;
 			start = offset_y * (i + y) * offset_x - i * offset_x + j + (x * 4);
 			start = proper_mod(start, dst->width * dst->height * sizeof(int));
-			dst_pixel[start + 0] = src_pixel[j + 0];
-			dst_pixel[start + 1] = src_pixel[j + 1];
-			dst_pixel[start + 2] = src_pixel[j + 2];
-			dst_pixel[start + 3] = src_pixel[j + 3];
+			memcpy(dst_pixel + start, src_pixel + j, 4);
 		}
 	}
 }

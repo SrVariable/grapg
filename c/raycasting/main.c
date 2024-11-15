@@ -11,6 +11,9 @@
 // - Figured out how to do the image_to_back_buffer but trial and error
 // - After implementing image_to_image I think I could redo so_long way better,
 // but I'll do it in the future because there's no time :(
+// - While testing drawing grids, I noticed The image_to_image was bugged
+// for other resolutions different than 800x600, for example 1024x576.
+// Fortunately, I was able to fix it quick and easily.
 //
 // @TODO:
 // - Implement raycasting???
@@ -48,11 +51,13 @@ typedef union
 #define LIGHTGREEN ((Color){.r = 127, .g = 255, .b = 127, .a = 255})
 #define LIGHTBLUE ((Color){.r = 127, .g = 127, .b = 255, .a = 255})
 #define LIGHTYELLOW ((Color){.r = 255, .g = 255, .b = 127, .a = 255})
+#define DARKGRAY ((Color){.hex = 0x303030FF})
+#define GRAY ((Color){.hex = 0x606060FF})
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
 #define TITLE "Raycasting"
 #define PIXEL_SIZE 64
+#define WINDOW_WIDTH ((PIXEL_SIZE) * 16)
+#define WINDOW_HEIGHT ((PIXEL_SIZE) * 9)
 #define PLAYER_COLOR LIGHTRED
 
 #define MAP_PATH "raycasting/.map"
@@ -198,8 +203,8 @@ int	setup_player(Info *info, Player *player)
 		{
 			if (info->map.arr[i][j] == 'P')
 			{
-				player->x = i;
-				player->y = j;
+				player->x = i * PIXEL_SIZE;
+				player->y = j * PIXEL_SIZE;
 				return (0);
 			}
 		}
@@ -260,7 +265,7 @@ int	setup_info(Info *info)
 	if (setup_image(info) != 0)
 		return (4);
 	setup_mouse(info->mlx, &info->mouse);
-	info->bg_color = (Color){.hex = 0x303030FF};
+	info->bg_color = DARKGRAY;
 	return (0);
 }
 
@@ -368,7 +373,10 @@ void	image_to_image(mlx_image_t	*dst, mlx_image_t *src, int x, int y)
 	src_pixel = &src->pixels[0];
 	dst_pixel = &dst->pixels[0];
 	offset_x = src->width * 4;
-	offset_y = 8.0 / src->width * 100;
+	if (src->width > dst->width)
+		offset_y = dst->width / src->width;
+	else
+		offset_y = 1/((double)src->width / dst->width);
 	for (int i = 0; i < src->height; ++i)
 	{
 		for (int j = i * offset_x; j < i * offset_x + offset_x; j += 4)

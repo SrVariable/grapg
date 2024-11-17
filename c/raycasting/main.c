@@ -434,6 +434,7 @@ void	draw_player(void *param)
 	get_mouse_pos(info->mlx, &x, &y);
 	draw_rectangle(info->map.back_buffer, (V2){player->y, player->x}, (V2){PIXEL_SIZE, PIXEL_SIZE}, PLAYER_COLOR);
 	draw_line(info->map.back_buffer, (V2){player->y + PIXEL_SIZE * 0.5, player->x + PIXEL_SIZE * 0.5}, (V2){x, y}, YELLOW);
+//	draw_line(info->map.back_buffer, (V2){player->y, player->x}, (V2){x, y}, YELLOW);
 }
 
 void	move_player_left(Player *player, Map *map)
@@ -443,11 +444,8 @@ void	move_player_left(Player *player, Map *map)
 
 	x = player->x / PIXEL_SIZE;
 	y = (player->y - player->speed) / PIXEL_SIZE;
-	printf("Move left %c\n", map->arr[x][y]);
-	printf("%d %d\n", x, y);
-	printf("%.4f %.4f\n", player->x / PIXEL_SIZE, (player->y - player->speed) / PIXEL_SIZE);
-	printf("%.4f %.4f\n", round(player->x / PIXEL_SIZE), round((player->y - player->speed) / PIXEL_SIZE));
-	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->x / PIXEL_SIZE - x > 0 && map->arr[x + 1][y] == '1')
+		++x;
 	if (player->y >= 0 && map->arr[x][y] != '1')
 	{
 		player->y -= player->speed;
@@ -461,11 +459,8 @@ void	move_player_right(Player *player, Map *map)
 
 	x = player->x / PIXEL_SIZE;
 	y = (player->y + player->speed + PIXEL_SIZE - 1) / PIXEL_SIZE;
-	printf("Move right %c\n", map->arr[x][y]);
-	printf("%d %d\n", x, y);
-	printf("%.4f %.4f\n", player->x / PIXEL_SIZE, (player->y + player->speed) / PIXEL_SIZE);
-	printf("%.4f %.4f\n", round(player->x / PIXEL_SIZE), round((player->y + player->speed) / PIXEL_SIZE));
-	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->x / PIXEL_SIZE - x > 0 && map->arr[x + 1][y] == '1')
+		++x;
 	if (player->y < (map->cols - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
 	{
 		player->y += player->speed;
@@ -479,11 +474,8 @@ void	move_player_down(Player *player, Map *map)
 
 	x = (player->x + player->speed + PIXEL_SIZE - 1) / PIXEL_SIZE;
 	y = player->y / PIXEL_SIZE;
-	printf("Move down %c\n", map->arr[x][y]);
-	printf("%d %d\n", x, y);
-	printf("%.4f %.4f\n", (player->x + player->speed) / PIXEL_SIZE, player->y / PIXEL_SIZE);
-	printf("%.4f %.4f\n", round((player->x + player->speed) / PIXEL_SIZE), round(player->y / PIXEL_SIZE));
-	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->y / PIXEL_SIZE - y > 0 && map->arr[x][y + 1] == '1')
+		++y;
 	if (x < (map->rows - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
 	{
 		player->x += player->speed;
@@ -497,11 +489,8 @@ void	move_player_up(Player *player, Map *map)
 
 	x = (player->x - player->speed) / PIXEL_SIZE;
 	y = player->y / PIXEL_SIZE;
-	printf("Move up %c\n", map->arr[x][y]);
-	printf("%d %d\n", x, y);
-	printf("%.4f %.4f\n", (player->x - player->speed) / PIXEL_SIZE, player->y / PIXEL_SIZE);
-	printf("%.4f %.4f\n", round((player->x - player->speed) / PIXEL_SIZE), round(player->y / PIXEL_SIZE));
-	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->y / PIXEL_SIZE - y > 0 && map->arr[x][y + 1] == '1')
+		++y;
 	if (x >= 0 && x < (map->rows - 1) * PIXEL_SIZE
 		&& map->arr[x][y] != '1')
 	{
@@ -617,6 +606,10 @@ void	draw_map(void *param)
 			if (info->map.arr[i][j] == '1')
 			{
 				draw_rectangle(info->map.back_buffer, (V2){j * PIXEL_SIZE, i * PIXEL_SIZE}, (V2){PIXEL_SIZE, PIXEL_SIZE}, BLACK);
+			}
+			else if (info->map.arr[i][j] == '0' || info->map.arr[i][j] == 'P')
+			{
+				draw_rectangle(info->map.back_buffer, (V2){j * PIXEL_SIZE, i * PIXEL_SIZE}, (V2){PIXEL_SIZE, PIXEL_SIZE}, LIGHTBLUE);
 			}
 		}
 	}

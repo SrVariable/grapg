@@ -105,6 +105,8 @@ typedef union
 #define BG_COLOR GRAY
 #define PLAYER_COLOR RED
 #define GRID_COLOR DARKGRAY
+#define RAD_STEP 8
+#define RADS (360 * (RAD_STEP))
 
 #define MAP_PATH "raycasting/.map"
 #define SPRITE_PATH "sprites/"
@@ -121,9 +123,11 @@ typedef struct
 
 typedef struct
 {
-	double		x;
-	double		y;
-	double		speed;
+	double	x;
+	double	y;
+	double	speed;
+	int		angle;
+	int		fov;
 }				Player;
 
 typedef struct
@@ -145,6 +149,8 @@ typedef struct
 	mlx_image_t	*render_img;
 	int			render_img_index;
 	int			render_img_count;
+	double		cos_table[RADS];
+	double		sin_table[RADS];
 }				Info;
 
 // Learnt (and stole) this trick from here: https://youtu.be/1PMf3FrFGD4?t=6233
@@ -247,6 +253,8 @@ int	setup_map(Info *info, Map *map)
 
 int	setup_player(Info *info, Player *player)
 {
+	player->angle = 270 * RAD_STEP;
+	player->fov = 100;
 	for (int i = 0; i < info->map.rows; ++i)
 	{
 		for (int j = 0; j < info->map.cols && info->map.arr[i][j]; ++j)
@@ -301,6 +309,15 @@ int	setup_image(Info *info)
 	return (0);
 }
 
+void	setup_table(Info *info)
+{
+	for (int i = 0; i < RADS; ++i)
+	{
+		info->cos_table[i] = cos(i * M_PI / 180 / RAD_STEP);
+		info->sin_table[i] = sin(i * M_PI / 180 / RAD_STEP);
+	}
+}
+
 int	setup_info(Info *info)
 {
 	info->is_mlx_set = false;
@@ -314,6 +331,7 @@ int	setup_info(Info *info)
 		return (3);
 	if (setup_image(info) != 0)
 		return (4);
+	setup_table(info);
 	setup_mouse(info->mlx, &info->mouse);
 	return (0);
 }
@@ -422,19 +440,31 @@ void	get_mouse_pos(mlx_t *mlx, int *x, int *y)
 		*x = 0;
 }
 
+void	draw_fov(Info *info, Player *player, int mx, int my)
+{
+	V2		start;
+	V2		end;
+
+	start = (V2){player->y + PIXEL_SIZE * 0.5, player->x + PIXEL_SIZE * 0.5};
+	end = (V2){mx, my};
+	draw_line(info->map.back_buffer, start, end, YELLOW);
+	draw_line(info->map.back_buffer, start, (V2){start.x + player->fov * info->cos_table[player->angle], start.y + player->fov * info->sin_table[player->angle]}, GREEN);
+	for (int i = -30 * RAD_STEP; i < 30 * RAD_STEP; ++i)
+		draw_line(info->map.back_buffer, start, (V2){start.x + player->fov * info->cos_table[proper_mod(player->angle + i, RADS)], start.y + player->fov * info->sin_table[proper_mod(player->angle + i, RADS)]}, GREEN);
+}
+
 void	draw_player(void *param)
 {
 	Info	*info;
 	Player	*player;
-	int		x;
-	int		y;
+	int		mx;
+	int		my;
 
 	info = param;
 	player = &info->player;
-	get_mouse_pos(info->mlx, &x, &y);
+	get_mouse_pos(info->mlx, &mx, &my);
 	draw_rectangle(info->map.back_buffer, (V2){player->y, player->x}, (V2){PIXEL_SIZE, PIXEL_SIZE}, PLAYER_COLOR);
-	draw_line(info->map.back_buffer, (V2){player->y + PIXEL_SIZE * 0.5, player->x + PIXEL_SIZE * 0.5}, (V2){x, y}, YELLOW);
-//	draw_line(info->map.back_buffer, (V2){player->y, player->x}, (V2){x, y}, YELLOW);
+	draw_fov(info, player, mx, my);
 }
 
 void	move_player_left(Player *player, Map *map)
@@ -447,9 +477,7 @@ void	move_player_left(Player *player, Map *map)
 	if (player->x / PIXEL_SIZE - x > 0 && map->arr[x + 1][y] == '1')
 		++x;
 	if (player->y >= 0 && map->arr[x][y] != '1')
-	{
 		player->y -= player->speed;
-	}
 }
 
 void	move_player_right(Player *player, Map *map)
@@ -462,9 +490,7 @@ void	move_player_right(Player *player, Map *map)
 	if (player->x / PIXEL_SIZE - x > 0 && map->arr[x + 1][y] == '1')
 		++x;
 	if (player->y < (map->cols - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
-	{
 		player->y += player->speed;
-	}
 }
 
 void	move_player_down(Player *player, Map *map)
@@ -477,9 +503,7 @@ void	move_player_down(Player *player, Map *map)
 	if (player->y / PIXEL_SIZE - y > 0 && map->arr[x][y + 1] == '1')
 		++y;
 	if (x < (map->rows - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
-	{
 		player->x += player->speed;
-	}
 }
 
 void	move_player_up(Player *player, Map *map)
@@ -493,9 +517,7 @@ void	move_player_up(Player *player, Map *map)
 		++y;
 	if (x >= 0 && x < (map->rows - 1) * PIXEL_SIZE
 		&& map->arr[x][y] != '1')
-	{
 		player->x -= player->speed;
-	}
 }
 
 void	handle_player(void *param)
@@ -509,21 +531,17 @@ void	handle_player(void *param)
 	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT_SHIFT))
 		player->speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
-	{
 		move_player_up(player, &info->map);
-	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_S))
-	{
 		move_player_down(player, &info->map);
-	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
-	{
 		move_player_left(player, &info->map);
-	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_D))
-	{
 		move_player_right(player, &info->map);
-	}
+	if (mlx_is_key_down(info->mlx, MLX_KEY_RIGHT))
+		player->angle = proper_mod(player->angle + RAD_STEP, RADS);
+	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT))
+		player->angle = proper_mod(player->angle - RAD_STEP, RADS);
 	player->x = proper_mod(player->x, info->map.back_buffer->height);
 	player->y = proper_mod(player->y, info->map.back_buffer->width);
 }

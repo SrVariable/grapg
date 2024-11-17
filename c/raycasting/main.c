@@ -27,6 +27,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <bits/endian.h>
+#include <math.h>
 
 typedef union
 {
@@ -37,6 +39,15 @@ typedef union
 	};
 	double	pos[2];
 }				V2;
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+enum
+{
+	A,
+	B,
+	G,
+	R,
+};
 
 typedef union
 {
@@ -50,6 +61,28 @@ typedef union
 	uint32_t	hex;
 	uint8_t		data[4];
 }				Color;
+#else
+enum
+{
+	R,
+	G,
+	B,
+	A,
+};
+
+typedef union
+{
+	struct
+	{
+		uint8_t	r;
+		uint8_t	g;
+		uint8_t	b;
+		uint8_t	a;
+	};
+	uint32_t	hex;
+	uint8_t		data[4];
+}				Color;
+#endif
 
 #define WHITE ((Color){.r = 255, .g = 255, .b = 255, .a = 255})
 #define BLACK ((Color){.r = 0, .g = 0, .b = 0, .a = 255})
@@ -65,10 +98,13 @@ typedef union
 #define GRAY ((Color){.hex = 0x606060FF})
 
 #define TITLE "Raycasting"
-#define PIXEL_SIZE 64
-#define WINDOW_WIDTH ((PIXEL_SIZE) * 16)
-#define WINDOW_HEIGHT ((PIXEL_SIZE) * 9)
-#define PLAYER_COLOR LIGHTRED
+#define PIXEL_SIZE 32
+#define RESIZE_WINDOW 2
+#define WINDOW_WIDTH ((PIXEL_SIZE) * 16 * (RESIZE_WINDOW))
+#define WINDOW_HEIGHT ((PIXEL_SIZE) * 9 * (RESIZE_WINDOW))
+#define BG_COLOR GRAY
+#define PLAYER_COLOR RED
+#define GRID_COLOR DARKGRAY
 
 #define MAP_PATH "raycasting/.map"
 #define SPRITE_PATH "sprites/"
@@ -85,9 +121,9 @@ typedef struct
 
 typedef struct
 {
-	double	x;
-	double	y;
-	double	speed;
+	double		x;
+	double		y;
+	double		speed;
 }				Player;
 
 typedef struct
@@ -109,7 +145,6 @@ typedef struct
 	mlx_image_t	*render_img;
 	int			render_img_index;
 	int			render_img_count;
-	Color		bg_color;
 }				Info;
 
 // Learnt (and stole) this trick from here: https://youtu.be/1PMf3FrFGD4?t=6233
@@ -118,12 +153,20 @@ int	proper_mod(int a, int b)
 	return ((a % b + b) % b);
 }
 
-void	custom_put_pixel(mlx_image_t *img, int x, int y, Color color)
+void	set_color(uint8_t *pixel, Color color)
+{
+	pixel[0] = color.r;
+	pixel[1] = color.g;
+	pixel[2] = color.b;
+	pixel[3] = color.a;
+}
+
+void	put_pixel(mlx_image_t *img, int x, int y, Color color)
 {
 	uint8_t	*pixel;
 
 	pixel = &img->pixels[(y * img->width + x) * sizeof(int)];
-	memcpy(pixel, color.data, 4);
+	set_color(pixel, color);
 }
 
 void	hook_close_window(void *param)
@@ -204,7 +247,6 @@ int	setup_map(Info *info, Map *map)
 
 int	setup_player(Info *info, Player *player)
 {
-	player->speed = 6 * info->mlx->delta_time;
 	for (int i = 0; i < info->map.rows; ++i)
 	{
 		for (int j = 0; j < info->map.cols && info->map.arr[i][j]; ++j)
@@ -273,7 +315,6 @@ int	setup_info(Info *info)
 	if (setup_image(info) != 0)
 		return (4);
 	setup_mouse(info->mlx, &info->mouse);
-	info->bg_color = DARKGRAY;
 	return (0);
 }
 
@@ -292,15 +333,93 @@ void	start_drawing(void *param)
 void	clear_background(void *param)
 {
 	Info	*info;
+	uint8_t	*pixel;
 
 	info = param;
 	for (int i = 0; i < sizeof(int) * info->map.back_buffer->width * info->map.back_buffer->height; i += 4)
 	{
-		info->map.back_buffer->pixels[i + 0] = info->bg_color.r;
-		info->map.back_buffer->pixels[i + 1] = info->bg_color.g;
-		info->map.back_buffer->pixels[i + 2] = info->bg_color.b;
-		info->map.back_buffer->pixels[i + 3] = info->bg_color.a;
+		pixel = &info->map.back_buffer->pixels[i];
+		set_color(pixel, BG_COLOR);
 	}
+}
+
+void	draw_circle(mlx_image_t *img, V2 center, int radius, Color color)
+{
+	for (int i = 0; i < radius * 2; ++i)
+	{
+		for (int j = 0; j < radius * 2; ++j)
+		{
+			if (((j - radius) * (j - radius) + (i - radius) * (i - radius)) < (radius * radius))
+				put_pixel(img, proper_mod(i + center.x, img->width), proper_mod(j + center.y, img->height), color);
+		}
+	}
+}
+
+void	draw_rectangle(mlx_image_t *img, V2 position, V2 size, Color color)
+{
+	for (int i = position.x; i < position.x + size.x; ++i)
+	{
+		for (int j = position.y; j < position.y + size.y; ++j)
+		{
+			put_pixel(img, proper_mod(i, img->width), proper_mod(j, img->height), color);
+		}
+	}
+}
+
+int	calculate_step(double dx, double dy)
+{
+	if (dx < 0)
+		dx *= -1;
+	if (dy < 0)
+		dy *= -1;
+	if (dx > dy)
+		return (dx);
+	return (dy);
+}
+
+void	draw_line(mlx_image_t *img, V2 start, V2 end, Color color)
+{
+	int	steps;
+	V2	increment;
+	V2	p;
+
+	steps = calculate_step(end.x - start.x, end.y - start.y);
+	increment.x = (end.x - start.x) / steps;
+	increment.y = (end.y - start.y) / steps;
+	p = start;
+	for (int i = 0; i <= steps; ++i)
+	{
+		put_pixel(img, proper_mod(p.x, img->width), proper_mod(p.y, img->height), color);
+		p.x += increment.x;
+		p.y += increment.y;
+	}
+}
+
+void	draw_grid(void *param)
+{
+	Info		*info;
+	mlx_image_t	*back_buffer;
+
+	info = param;
+	back_buffer = info->map.back_buffer;
+	for (int i = PIXEL_SIZE; i < back_buffer->height; i += PIXEL_SIZE)
+		draw_line(back_buffer, (V2){0, i}, (V2){back_buffer->width, i}, GRID_COLOR);
+	for (int i = PIXEL_SIZE; i < back_buffer->width; i += PIXEL_SIZE)
+		draw_line(back_buffer, (V2){i, 0}, (V2){i, back_buffer->height}, GRID_COLOR);
+}
+
+// Same as mlx_get_mouse_pos, but inside the screen
+void	get_mouse_pos(mlx_t *mlx, int *x, int *y)
+{
+	mlx_get_mouse_pos(mlx, x, y);
+	if (*y > WINDOW_HEIGHT)
+		*y = WINDOW_HEIGHT;
+	else if (*y < 0)
+		*y = 0;
+	if (*x > WINDOW_WIDTH)
+		*x = WINDOW_WIDTH;
+	else if (*x < 0)
+		*x = 0;
 }
 
 void	draw_player(void *param)
@@ -312,14 +431,81 @@ void	draw_player(void *param)
 
 	info = param;
 	player = &info->player;
-	x = player->x;
-	y = player->y;
-	for (int i = x; i < x + PIXEL_SIZE; ++i)
+	get_mouse_pos(info->mlx, &x, &y);
+	draw_rectangle(info->map.back_buffer, (V2){player->y, player->x}, (V2){PIXEL_SIZE, PIXEL_SIZE}, PLAYER_COLOR);
+	draw_line(info->map.back_buffer, (V2){player->y + PIXEL_SIZE * 0.5, player->x + PIXEL_SIZE * 0.5}, (V2){x, y}, YELLOW);
+}
+
+void	move_player_left(Player *player, Map *map)
+{
+	int	x;
+	int	y;
+
+	x = player->x / PIXEL_SIZE;
+	y = (player->y - player->speed) / PIXEL_SIZE;
+	printf("Move left %c\n", map->arr[x][y]);
+	printf("%d %d\n", x, y);
+	printf("%.4f %.4f\n", player->x / PIXEL_SIZE, (player->y - player->speed) / PIXEL_SIZE);
+	printf("%.4f %.4f\n", round(player->x / PIXEL_SIZE), round((player->y - player->speed) / PIXEL_SIZE));
+	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->y >= 0 && map->arr[x][y] != '1')
 	{
-		for (int j = y; j < y + PIXEL_SIZE; ++j)
-		{
-			custom_put_pixel(info->map.back_buffer, proper_mod(j, WINDOW_WIDTH), proper_mod(i, WINDOW_HEIGHT), PLAYER_COLOR);
-		}
+		player->y -= player->speed;
+	}
+}
+
+void	move_player_right(Player *player, Map *map)
+{
+	int	x;
+	int	y;
+
+	x = player->x / PIXEL_SIZE;
+	y = (player->y + player->speed + PIXEL_SIZE - 1) / PIXEL_SIZE;
+	printf("Move right %c\n", map->arr[x][y]);
+	printf("%d %d\n", x, y);
+	printf("%.4f %.4f\n", player->x / PIXEL_SIZE, (player->y + player->speed) / PIXEL_SIZE);
+	printf("%.4f %.4f\n", round(player->x / PIXEL_SIZE), round((player->y + player->speed) / PIXEL_SIZE));
+	printf("%.4f %.4f\n", player->x, player->y);
+	if (player->y < (map->cols - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
+	{
+		player->y += player->speed;
+	}
+}
+
+void	move_player_down(Player *player, Map *map)
+{
+	int	x;
+	int	y;
+
+	x = (player->x + player->speed + PIXEL_SIZE - 1) / PIXEL_SIZE;
+	y = player->y / PIXEL_SIZE;
+	printf("Move down %c\n", map->arr[x][y]);
+	printf("%d %d\n", x, y);
+	printf("%.4f %.4f\n", (player->x + player->speed) / PIXEL_SIZE, player->y / PIXEL_SIZE);
+	printf("%.4f %.4f\n", round((player->x + player->speed) / PIXEL_SIZE), round(player->y / PIXEL_SIZE));
+	printf("%.4f %.4f\n", player->x, player->y);
+	if (x < (map->rows - 1) * PIXEL_SIZE && map->arr[x][y] != '1')
+	{
+		player->x += player->speed;
+	}
+}
+
+void	move_player_up(Player *player, Map *map)
+{
+	int	x;
+	int	y;
+
+	x = (player->x - player->speed) / PIXEL_SIZE;
+	y = player->y / PIXEL_SIZE;
+	printf("Move up %c\n", map->arr[x][y]);
+	printf("%d %d\n", x, y);
+	printf("%.4f %.4f\n", (player->x - player->speed) / PIXEL_SIZE, player->y / PIXEL_SIZE);
+	printf("%.4f %.4f\n", round((player->x - player->speed) / PIXEL_SIZE), round(player->y / PIXEL_SIZE));
+	printf("%.4f %.4f\n", player->x, player->y);
+	if (x >= 0 && x < (map->rows - 1) * PIXEL_SIZE
+		&& map->arr[x][y] != '1')
+	{
+		player->x -= player->speed;
 	}
 }
 
@@ -330,17 +516,27 @@ void	handle_player(void *param)
 
 	info = param;
 	player = &info->player;
-	player->speed = 100 * info->mlx->delta_time;
+	player->speed = 1;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_LEFT_SHIFT))
 		player->speed *= 2;
 	if (mlx_is_key_down(info->mlx, MLX_KEY_W))
-		player->x -= player->speed;
+	{
+		move_player_up(player, &info->map);
+	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_S))
-		player->x += player->speed;
+	{
+		move_player_down(player, &info->map);
+	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_A))
-		player->y -= player->speed;
+	{
+		move_player_left(player, &info->map);
+	}
 	if (mlx_is_key_down(info->mlx, MLX_KEY_D))
-		player->y += player->speed;
+	{
+		move_player_right(player, &info->map);
+	}
+	player->x = proper_mod(player->x, info->map.back_buffer->height);
+	player->y = proper_mod(player->y, info->map.back_buffer->width);
 }
 
 void	test(mlx_key_data_t keydata, void *param)
@@ -362,7 +558,6 @@ void	test(mlx_key_data_t keydata, void *param)
 	if (hidden)
 	{
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_HIDDEN);
-		mlx_set_mouse_pos(info->mlx, WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5);
 	}
 	else
 		mlx_set_cursor_mode(info->mlx, MLX_MOUSE_NORMAL);
@@ -397,12 +592,34 @@ void	image_to_image(mlx_image_t *dst, mlx_image_t *src, int x, int y)
 	}
 }
 
-void	image_to_back_buffer(void *param)
+void	draw_image(void *param)
 {
-	Info	*info;
+	Info			*info;
+	static double	x = 0;
+	static double	y = WINDOW_HEIGHT * 0.5 - PIXEL_SIZE;
 
 	info = param;
-	image_to_image(info->map.back_buffer, info->render_img, info->player.y, info->player.x);
+	image_to_image(info->map.back_buffer, info->render_img, x, y);
+	draw_line(info->map.back_buffer, (V2){x + info->render_img->width * 0.5, y + info->render_img->height * 0.5}, (V2){WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5}, LIGHTRED);
+	x = proper_mod(x + 2, info->map.back_buffer->width);
+}
+
+void	draw_map(void *param)
+{
+	Info	*info;
+	Map		*map;
+
+	info = param;
+	for (int i = 0; i < info->map.rows; ++i)
+	{
+		for (int j = 0; j < info->map.cols; ++j)
+		{
+			if (info->map.arr[i][j] == '1')
+			{
+				draw_rectangle(info->map.back_buffer, (V2){j * PIXEL_SIZE, i * PIXEL_SIZE}, (V2){PIXEL_SIZE, PIXEL_SIZE}, BLACK);
+			}
+		}
+	}
 }
 
 int	main(void)
@@ -420,8 +637,10 @@ int	main(void)
 	mlx_loop_hook(info.mlx, handle_player, &info);
 	mlx_key_hook(info.mlx, test, &info);
 	mlx_loop_hook(info.mlx, clear_background, &info);
+	mlx_loop_hook(info.mlx, draw_map, &info);
 	mlx_loop_hook(info.mlx, draw_player, &info);
-	mlx_loop_hook(info.mlx, image_to_back_buffer, &info);
+	mlx_loop_hook(info.mlx, draw_grid, &info);
+	//mlx_loop_hook(info.mlx, draw_image, &info);
 	mlx_loop_hook(info.mlx, start_drawing, &info);
 	mlx_loop(info.mlx);
 	if (info.is_mlx_set)

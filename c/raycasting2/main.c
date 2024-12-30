@@ -115,7 +115,7 @@ int	get_y_length(Player *player, int distance)
  * y los cálculos del Bug #2 son incorrectos, el ángulo correcto
  * es player.angle >= 204 && player.angle <= 336
  *
- * Fix #3:
+ * Fix #2:
  * He eliminado Fix #1 y lo he arreglado añadiendo la condición
  * length_y != get_y_length(player, i + 1), básicamente si el siguiente
  * punto con respecto al punto y es el mismo que el actual, se sigue quedando
@@ -125,6 +125,15 @@ int	get_y_length(Player *player, int distance)
  * Le he añadido angle como parámetro para poder dibujar los puntos del fov,
  * además tiene que estar convertido en radianes
  * También he añadido color, para ver los diferentes puntos bien
+ *
+ * Bug #3:
+ * Para angle = 270 no se calculan bien los puntos
+ *
+ * Fix #3:
+ * El Fix #2 antes era Fix #3 porque no sé contar, ahora está bien, además
+ * he corregido el Bug #3, simplemente he añadido otra condición en la que
+ * length = length_y siguiendo la misma lógica que Fix #2, pero con respecto
+ * al punto x
  */
 void	draw_n_points(Player *player, int n_points, float angle, Color color)
 {
@@ -133,12 +142,13 @@ void	draw_n_points(Player *player, int n_points, float angle, Color color)
 		int length_x = get_x_length(player, i);
 		int length_y = get_y_length(player, i);
 		int length = length_x;
-		if (length_y < length_x && length_y != get_y_length(player, i + 1))
+		if ((length_y < length_x && length_y != get_y_length(player, i + 1))
+			|| length_x == get_x_length(player, i + 1))
 		{
 			length = length_y;
 		}
-		//printf("Calculated length_x: %f %f\n", player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
-		//printf("Calculated length_y: %f %f\n", player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
+		printf("Calculated length_x: %f %f\n", player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
+		printf("Calculated length_y: %f %f\n", player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
 		DrawCircle(player->x + cos(angle) * length, player->y + sin(angle) * length, 2, color);
 	}
 }
@@ -227,10 +237,11 @@ int main(void)
 			.x = player.x + cos(DEG_TO_RADS(player.angle)) * player.fov,
 			.y = player.y + sin(DEG_TO_RADS(player.angle)) * player.fov,
 		};
-		//printf("Player: %f %f | Scaled: %f %f\n", player.x, player.y, player.x / PIXEL_SIZE, player.y / PIXEL_SIZE);
-		//printf("Ray end: %f %f | Scaled: %f %f | Expected: %d %d\n", player.ray.x, player.ray.y, player.ray.x / PIXEL_SIZE, player.ray.y / PIXEL_SIZE, (int)(player.x / PIXEL_SIZE) + 1, (int)(player.y / PIXEL_SIZE) + 1);
-		//printf("Angle: %f\n", player.angle);
-		DrawLine(player.x, player.y, player.ray.x, player.ray.y, GetColor(0xFFFFFFAA));
+
+		printf("Player: %f %f | Scaled: %f %f\n", player.x, player.y, player.x / PIXEL_SIZE, player.y / PIXEL_SIZE);
+		printf("Ray end: %f %f | Scaled: %f %f | Expected: %d %d\n", player.ray.x, player.ray.y, player.ray.x / PIXEL_SIZE, player.ray.y / PIXEL_SIZE, (int)(player.x / PIXEL_SIZE) + 1, (int)(player.y / PIXEL_SIZE) + 1);
+		printf("Angle: %f\n", player.angle);
+		DrawLine(player.x, player.y, player.ray.x, player.ray.y, GetColor(0xFFFFFFFF));
 
 		/**
 		 * Thinking:
@@ -272,12 +283,7 @@ int main(void)
 		//	//DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, GetColor(0xAAAAAAFF));
 		//}
 
-		for (int i = 1; i <= 15; ++i)
-		{
-			draw_n_points(&player, n_points, DEG_TO_RADS(player.angle + i), GetColor(0x00FF00FF + (i * 0x10000000)));
-			draw_n_points(&player, n_points, DEG_TO_RADS(player.angle - i), GetColor(0x00FF00FF - (i * 0x00010000)));
-		}
-		draw_n_points(&player, n_points, DEG_TO_RADS(player.angle), GetColor(0xFF0000FF));
+		draw_n_points(&player, n_points, DEG_TO_RADS(player.angle), YELLOW);
 		EndDrawing();
 	}
 	CloseWindow();

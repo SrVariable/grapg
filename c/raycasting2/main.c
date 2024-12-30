@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define PIXEL_SIZE 128
-#define RESIZE 0.5
+#define PIXEL_SIZE 32
+#define RESIZE 2
 #define SCREEN_WIDTH ((PIXEL_SIZE) * 16 * (RESIZE))
 #define SCREEN_HEIGHT ((PIXEL_SIZE) * 9 * (RESIZE))
 #define CIRCLE_SIZE 3
@@ -36,7 +36,7 @@ int main(void)
 		.x = 0.7 * PIXEL_SIZE,
 		.y = 1.2 * PIXEL_SIZE,
 		.angle = 50,
-		.size = 10,
+		.size = 4,
 		.fov = 100,
 	};
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycasting2");
@@ -132,10 +132,10 @@ int main(void)
 			if (cos(DEG_TO_RADS(player.angle)) != 0)
 			{
 				int expected = 0;
-				int distance = 1;
+				int distance = 0;
 				if (cos(DEG_TO_RADS(player.angle)) > 0)
 				{
-					expected = (int)(player.x / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE;
+					expected = (int)(player.x / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
 				}
 				else
 				{
@@ -147,21 +147,25 @@ int main(void)
 			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * length, player.y + sin(DEG_TO_RADS(player.angle)) * length, 3, GetColor(0xFFBBFFFF));
 		}
 
-		// Esto sirve para la Y
+		// Esto es para la Y
 		{
-			int saved = -1;
-			for (int i = 0; i < 1000; ++i)
+			int length = -1;
+			if (sin(DEG_TO_RADS(player.angle)) != 0)
 			{
-				int expected = (int)(player.y / PIXEL_SIZE) + 1;
-				int scaled = (player.y + sin(DEG_TO_RADS(player.angle)) * i) / PIXEL_SIZE;
-				if (scaled >= expected)
+				int expected = 0;
+				int distance = 0;
+				if (sin(DEG_TO_RADS(player.angle)) > 0)
 				{
-					saved = i;
-					break;
+					expected = (int)(player.y / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
 				}
+				else
+				{
+					expected = (int)(player.y / PIXEL_SIZE - distance) * PIXEL_SIZE;
+				}
+				length = (expected - player.y) / sin(DEG_TO_RADS(player.angle));
 			}
-			printf("%f: %d -> %f\n", player.angle, saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved);
-			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, BLUE);
+			printf("step: %d -> %f\n", length, player.x + cos(DEG_TO_RADS(player.angle)) * length);
+			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * length, player.y + sin(DEG_TO_RADS(player.angle)) * length, 3, GetColor(0xBBBBFF));
 		}
 		EndDrawing();
 	}

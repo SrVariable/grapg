@@ -135,6 +135,15 @@ int	get_y_length(Player *player, int distance, float angle)
  * length = length_y siguiendo la misma lógica que Fix #2, pero con respecto
  * al punto x
  *
+ * Bug #4:
+ * El siguiente punto se debería calcular con respecto a la nueva posición
+ * del punto, porque de lo contrario se skippean puntos
+ *
+ * NOTA:
+ * Me he dado cuenta que el Bug #4, técnicamente los puntos los calculo bien,
+ * pero el problema es que al quedarme con una longitud, sí que calculo mal
+ * los puntos, pero si pintase tanto length_x como length_y pintaría todos
+ * los puntos correctamente. Pero tengo que pensar cuándo renta pintar los dos
  */
 void	draw_n_points(Player *player, int n_points, float angle, Color color)
 {
@@ -148,10 +157,45 @@ void	draw_n_points(Player *player, int n_points, float angle, Color color)
 		{
 			length = length_y;
 		}
-		printf("Calculated length_x: %f %f\n", player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
-		printf("Calculated length_y: %f %f\n", player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
+		printf("Calculated length_x %d: %f %f\n", i, player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
+		printf("Calculated length_y %d: %f %f\n", i, player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
 		DrawCircle(player->x + cos(angle) * length, player->y + sin(angle) * length, 2, color);
 	}
+}
+
+/**
+ * Al crear esta función me he dado cuenta que no calculo todos los puntos
+ * pegados al grid
+ */
+Vector2	get_collided_point(Player *player, float angle, int map[16][16])
+{
+	Vector2 p = {0};
+	for (int i = 1; i < 5; ++i)
+	{
+		int length_x = get_x_length(player, i, angle);
+		int length_y = get_y_length(player, i, angle);
+		int length = length_x;
+		if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
+			|| length_x == get_x_length(player, i + 1, angle))
+		{
+			length = length_y;
+		}
+		p = (Vector2){
+			player->x + cos(angle) * length,
+			player->y + sin(angle) * length
+		};
+		int x = p.x / PIXEL_SIZE;
+		int y = p.y / PIXEL_SIZE;
+		if (x >= 0 && x < 16 && y >= 0 && y < 16)
+		{
+			if (map[y][x] == 1)
+			{
+				printf("COLLIDE: %f %f | %d %d\n", p.x, p.y, x, y);
+				break;
+			}
+		}
+	}
+	return (p);
 }
 
 int main(void)
@@ -170,9 +214,27 @@ int main(void)
 		.size = 4,
 		.fov = 100,
 	};
+	int map[16][16] = {
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	};
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycasting2");
 	SetTargetFPS(60);
-	int n_points = 5;
+	int n_points = 3;
 	float time = 0;
 	bool is_paused = true;
 	while (!WindowShouldClose())
@@ -208,6 +270,18 @@ int main(void)
 		BeginDrawing();
 		ClearBackground(GetColor(0x303030FF));
 
+		// Draw map
+		for (int i = 0; i < 16; ++i)
+		{
+			for (int j = 0; j < 16; ++j)
+			{
+				if (map[i][j] == 1)
+				{
+					DrawRectangle(j * PIXEL_SIZE, i * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE, LIME);
+				}
+			}
+		}
+
 		// Draw grids
 		for (int i = 0; i < SCREEN_HEIGHT; i += PIXEL_SIZE)
 		{
@@ -232,17 +306,17 @@ int main(void)
 		printf("Angle: %f\n", player.angle);
 		DrawLine(player.x, player.y, player.ray.x, player.ray.y, GetColor(0xFFFFFFFF));
 
-		Vector2 lray = {
-			.x = player.x + cos(DEG_TO_RADS(proper_mod(player.angle - 15, 360))) * player.fov,
-			.y = player.y + sin(DEG_TO_RADS(proper_mod(player.angle - 15, 360))) * player.fov,
-		};
-		DrawLine(player.x, player.y, lray.x, lray.y, GetColor(0xFFFFFFFF));
+		//Vector2 lray = {
+		//	.x = player.x + cos(DEG_TO_RADS(proper_mod(player.angle - 15, 360))) * player.fov,
+		//	.y = player.y + sin(DEG_TO_RADS(proper_mod(player.angle - 15, 360))) * player.fov,
+		//};
+		//DrawLine(player.x, player.y, lray.x, lray.y, GetColor(0xFFFFFFFF));
 
-		Vector2 rray = {
-			.x = player.x + cos(DEG_TO_RADS(proper_mod(player.angle + 15, 360))) * player.fov,
-			.y = player.y + sin(DEG_TO_RADS(proper_mod(player.angle + 15, 360))) * player.fov,
-		};
-		DrawLine(player.x, player.y, rray.x, rray.y, GetColor(0xFFFFFFFF));
+		//Vector2 rray = {
+		//	.x = player.x + cos(DEG_TO_RADS(proper_mod(player.angle + 15, 360))) * player.fov,
+		//	.y = player.y + sin(DEG_TO_RADS(proper_mod(player.angle + 15, 360))) * player.fov,
+		//};
+		//DrawLine(player.x, player.y, rray.x, rray.y, GetColor(0xFFFFFFFF));
 
 		/**
 		 * Thinking:
@@ -284,12 +358,14 @@ int main(void)
 		//	//DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, GetColor(0xAAAAAAFF));
 		//}
 
-		for (int i = 0; i < 15; ++i)
-		{
-			draw_n_points(&player, n_points, DEG_TO_RADS(player.angle + i), SKYBLUE);
-			draw_n_points(&player, n_points, DEG_TO_RADS(player.angle - i), SKYBLUE);
-		}
+		//for (int i = 0; i < 15; ++i)
+		//{
+		//	draw_n_points(&player, n_points, DEG_TO_RADS(player.angle + i), SKYBLUE);
+		//	draw_n_points(&player, n_points, DEG_TO_RADS(player.angle - i), SKYBLUE);
+		//}
 		draw_n_points(&player, n_points, DEG_TO_RADS(player.angle), YELLOW);
+		//Vector2 p = get_collided_point(&player, DEG_TO_RADS(player.angle), map);
+		//DrawCircleV(p, 2, RED);
 		EndDrawing();
 	}
 	CloseWindow();

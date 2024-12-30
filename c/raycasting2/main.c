@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define PIXEL_SIZE 32
-#define RESIZE 2
+#define PIXEL_SIZE 128
+#define RESIZE 0.5
 #define SCREEN_WIDTH ((PIXEL_SIZE) * 16 * (RESIZE))
 #define SCREEN_HEIGHT ((PIXEL_SIZE) * 9 * (RESIZE))
 #define CIRCLE_SIZE 3
@@ -94,21 +94,21 @@ int main(void)
 		 * La siguiente posición siempre es
 		 * (int)(player.x/PIXEL_SIZE) + 1
 		 */
-		//{
-		//	int saved = -1;
-		//	for (int i = 0; i < 1000; ++i)
-		//	{
-		//		int expected = (int)(player.x / PIXEL_SIZE) + 1;
-		//		int scaled = (player.x + cos(DEG_TO_RADS(player.angle)) * i) / PIXEL_SIZE;
-		//		if (scaled >= expected)
-		//		{
-		//			saved = i;
-		//			break;
-		//		}
-		//	}
-		//	printf("%f: %d -> %f\n", player.angle, saved, player.x + cos(DEG_TO_RADS(player.angle)) * saved);
-		//	DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, GetColor(0xAAAAAAFF));
-		//}
+		{
+			int saved = -1;
+			for (int i = 0; i < 1000; ++i)
+			{
+				int expected = (int)(player.x / PIXEL_SIZE) + 1;
+				int scaled = (player.x + cos(DEG_TO_RADS(player.angle)) * i) / PIXEL_SIZE;
+				if (scaled >= expected)
+				{
+					saved = i;
+					break;
+				}
+			}
+			printf("%f: %d -> %f\n", player.angle, saved, player.x + cos(DEG_TO_RADS(player.angle)) * saved);
+			//DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, GetColor(0xAAAAAAFF));
+		}
 
 		/**
 		 * Fórmula: x + cos(a) * i
@@ -131,17 +131,19 @@ int main(void)
 			int length = -1;
 			if (cos(DEG_TO_RADS(player.angle)) != 0)
 			{
+				int expected = 0;
+				int distance = 1;
 				if (cos(DEG_TO_RADS(player.angle)) > 0)
 				{
-					length = ((int)(player.x / PIXEL_SIZE + 1) * PIXEL_SIZE - player.x);
+					expected = (int)(player.x / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE;
 				}
 				else
 				{
-					length = ((int)(player.x / PIXEL_SIZE) * PIXEL_SIZE - player.x);
+					expected = (int)(player.x / PIXEL_SIZE - distance) * PIXEL_SIZE;
 				}
-				length /= cos(DEG_TO_RADS(player.angle));
+				length = (expected - player.x) / cos(DEG_TO_RADS(player.angle));
 			}
-			printf("step: %d\n", length);
+			printf("step: %d -> %f\n", length, player.x + cos(DEG_TO_RADS(player.angle)) * length);
 			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * length, player.y + sin(DEG_TO_RADS(player.angle)) * length, 3, GetColor(0xFFBBFFFF));
 		}
 

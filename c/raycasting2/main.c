@@ -111,6 +111,17 @@ int	get_y_length(Player *player, int distance)
  * (player.angle > 336 && player.angle < 360)
  * ||
  * (player.angle > 180 && player.angle < 204)
+ *
+ * NOTA:
+ * Fix #1 no arregla el problema, lo había malinterpretado,
+ * y los cálculos del Bug #2 son incorrectos, el ángulo correcto
+ * es player.angle >= 204 && player.angle <= 336
+ *
+ * Fix #3:
+ * He eliminado Fix #1 y lo he arreglado añadiendo la condición
+ * length_y != get_y_length(player, i + 1), básicamente si el siguiente
+ * punto con respecto al punto y es el mismo que el actual, se sigue quedando
+ * con length_x, esto parece ser que arregla el bug inicial
  */
 void	draw_n_points(Player *player, int n_points)
 {
@@ -119,13 +130,7 @@ void	draw_n_points(Player *player, int n_points)
 		int length_x = get_x_length(player, i);
 		int length_y = get_y_length(player, i);
 		int length = length_x;
-		printf("lengths pre: %d %d\n", get_x_length(player, i), get_y_length(player, i));
-		if (length_y == 0)
-		{
-			length_y = get_y_length(player, i + 1);
-		}
-		printf("lengths post: %d %d\n", get_x_length(player, i + 1), get_y_length(player, i + 1));
-		if (length_y < length_x && length_y != 0)
+		if (length_y < length_x && length_y != get_y_length(player, i + 1))
 		{
 			length = length_y;
 		}
@@ -141,8 +146,8 @@ int main(void)
 		.x = 457.4f,
 		.y = 448.4f,
 		.angle = 276,
-		.size = 4,
-		.fov = 100,
+		.size = 1,
+		.fov = 1,
 	};
 	//Player player = {
 	//	.x = 0.7 * PIXEL_SIZE,
@@ -154,18 +159,28 @@ int main(void)
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycasting2");
 	SetTargetFPS(60);
 	int n_points = 1;
+	float time = 0;
+	bool is_paused = true;
 	while (!WindowShouldClose())
 	{
+		time += GetFrameTime() * 60;
+		if (time >= 1 && !is_paused)
+		{
+			player.angle = proper_mod(player.angle + 1, 360);
+			time = 0;
+		}
 		int speed = 1;
+		if (IsKeyPressed(KEY_SPACE))
+			is_paused = !is_paused;
 		if (IsKeyDown(KEY_LEFT_SHIFT))
 			speed *= 4;
-		if (IsKeyDown(KEY_W))
+		if (IsKeyPressed(KEY_W))
 			player.y -= speed;
-		if (IsKeyDown(KEY_S))
+		if (IsKeyPressed(KEY_S))
 			player.y += speed;
-		if (IsKeyDown(KEY_A))
+		if (IsKeyPressed(KEY_A))
 			player.x -= speed;
-		if (IsKeyDown(KEY_D))
+		if (IsKeyPressed(KEY_D))
 			player.x += speed;
 		if (IsKeyDown(KEY_LEFT))
 			player.angle = proper_mod(player.angle - 1, 360);

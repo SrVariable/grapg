@@ -105,8 +105,9 @@ typedef union
 #define BG_COLOR GRAY
 #define PLAYER_COLOR RED
 #define GRID_COLOR DARKGRAY
-#define RAD_STEP 8
+#define RAD_STEP 1
 #define RADS (360 * (RAD_STEP))
+#define EPSILON 1e-6
 
 #define MAP_PATH "raycasting/.map"
 #define SPRITE_PATH "sprites/"
@@ -151,6 +152,7 @@ typedef struct
 	int			render_img_count;
 	double		cos_table[RADS];
 	double		sin_table[RADS];
+	double		tan_table[RADS];
 }				Info;
 
 // Learnt (and stole) this trick from here: https://youtu.be/1PMf3FrFGD4?t=6233
@@ -253,7 +255,7 @@ int	setup_map(Info *info, Map *map)
 
 int	setup_player(Info *info, Player *player)
 {
-	player->angle = 270 * RAD_STEP;
+	player->angle = 90 * RAD_STEP;
 	player->fov = 100;
 	for (int i = 0; i < info->map.rows; ++i)
 	{
@@ -315,6 +317,7 @@ void	setup_table(Info *info)
 	{
 		info->cos_table[i] = cos(i * M_PI / 180 / RAD_STEP);
 		info->sin_table[i] = sin(i * M_PI / 180 / RAD_STEP);
+		info->tan_table[i] = tan(i * M_PI / 180 / RAD_STEP);
 	}
 }
 
@@ -413,6 +416,120 @@ void	draw_line(mlx_image_t *img, V2 start, V2 end, Color color)
 	}
 }
 
+V2	calculate_step2(Info *info, int angle)
+{
+	V2	step;
+
+	step = (V2){-1, -1};
+	if (info->cos_table[angle] > 0)
+		step.x *= -1;
+	if (info->sin_table[angle] > 0)
+		step.y *= -1;
+	return (step);
+}
+
+V2	calculate_next(V2 p, V2 step)
+{
+	V2	next;
+
+	if (step.x > 0)
+		next.x = ceil(p.x / PIXEL_SIZE) * PIXEL_SIZE;
+	else
+		next.x = floor(p.x / PIXEL_SIZE) * PIXEL_SIZE;
+	if (step.y > 0)
+		next.y = ceil(p.y / PIXEL_SIZE) * PIXEL_SIZE;
+	else
+		next.y = floor(p.y / PIXEL_SIZE) * PIXEL_SIZE;
+	return (next);
+}
+
+V2	calculate_t(Info *info, V2 p, int angle)
+{
+	V2	t;
+
+	if (info->cos_table[angle] != 0)
+		t.x = fabs(p.x);
+	else
+		t.x = INFINITY;
+	if (info->sin_table[angle] != 0)
+		t.y = fabs(p.y);
+	else
+		t.x = INFINITY;
+	return (t);
+}
+
+V2 next_point(Info *info, V2 p, int angle)
+{
+	V2	step;
+	V2	next;
+	V2	t;
+	V2	ray;
+
+	step = calculate_step2(info, angle);
+	next = calculate_next(p, step);
+	t = calculate_t(info, (V2){next.x - p.x, next.y - p.y}, angle);
+	ray = (V2){p.x, p.y};
+	int iterations = 0;
+	while (++iterations < 100)
+	{
+		if (t.x < t.y)
+		{
+			ray.x = next.x + step.x * EPSILON;
+			ray.y = p.y + (next.x - p.x) * info->tan_table[angle];
+			next.x += step.x * PIXEL_SIZE;
+			t.x = (cos(angle * M_PI / 180) != 0) ? fabs((next.x - p.x) / cos(angle * M_PI / 180)) : INFINITY;
+		}
+		else
+		{
+			ray.y = next.y + step.y * EPSILON;
+			ray.x = p.x + (next.y - p.y) / info->tan_table[angle];
+			next.y += step.y * PIXEL_SIZE;
+			t.y = (sin(angle * M_PI / 180) != 0) ? fabs((next.x - p.x) / sin(angle * M_PI / 180)) : INFINITY;
+		}
+	}
+	return ((V2){ray.y, ray.x});
+}
+
+V2 draw_points(mlx_image_t *img, Info *info, Player *player, V2 p, Color color)
+{
+    V2 start = (V2){p.x, p.y};
+    int cs = 4;
+    draw_circle(img, (V2){p.y - cs, p.x - cs}, cs, WHITE);
+    double ray_angle = player->angle * (M_PI / 180.0);
+    double tan_angle = tan(ray_angle);
+    int step_x = (cos(ray_angle) > 0) ? 1 : -1;
+    int step_y = (sin(ray_angle) > 0) ? 1 : -1;
+    double delta_x = PIXEL_SIZE;
+    double delta_y = PIXEL_SIZE;
+    double next_x, next_y;
+    if (cos(ray_angle) != 0) next_x = fabs(PIXEL_SIZE / cos(ray_angle));
+    else next_x = INFINITY;
+    if (sin(ray_angle) != 0) next_y = fabs(PIXEL_SIZE / sin(ray_angle));
+    else next_y = INFINITY;
+    double ray_x = p.x;
+    double ray_y = p.y;
+    while (1)
+    {
+        if (next_x < next_y)
+        {
+            ray_x += step_x * PIXEL_SIZE;
+            ray_y += step_x * PIXEL_SIZE * tan_angle;
+            next_x += delta_x;
+        }
+        else
+        {
+            ray_y += step_y * PIXEL_SIZE;
+            ray_x += step_y * PIXEL_SIZE / tan_angle;
+            next_y += delta_y;
+        }
+        break;
+    }
+    V2 hit = (V2){ray_y, ray_x};
+    draw_circle(img, (V2){hit.x - cs, hit.y - cs}, cs, YELLOW);
+    draw_line(img, (V2){start.y, start.x}, hit, GREEN);
+	return ((V2){hit.y, hit.x});
+}
+
 void	draw_grid(void *param)
 {
 	Info		*info;
@@ -444,13 +561,24 @@ void	draw_fov(Info *info, Player *player, int mx, int my)
 {
 	V2		start;
 	V2		end;
+	double	endx;
+	double	endy;
 
 	start = (V2){player->y + PIXEL_SIZE * 0.5, player->x + PIXEL_SIZE * 0.5};
 	end = (V2){mx, my};
-	draw_line(info->map.back_buffer, start, end, YELLOW);
-	draw_line(info->map.back_buffer, start, (V2){start.x + player->fov * info->cos_table[player->angle], start.y + player->fov * info->sin_table[player->angle]}, GREEN);
-	for (int i = -30 * RAD_STEP; i < 30 * RAD_STEP; ++i)
-		draw_line(info->map.back_buffer, start, (V2){start.x + player->fov * info->cos_table[proper_mod(player->angle + i, RADS)], start.y + player->fov * info->sin_table[proper_mod(player->angle + i, RADS)]}, GREEN);
+	//for (int i = -30 * RAD_STEP; i < 30 * RAD_STEP; ++i)
+	//{
+	//	endx = start.x + (player->fov - 25) * info->cos_table[proper_mod(player->angle + i, RADS)];
+	//	endy = start.y + (player->fov - 25) * info->sin_table[proper_mod(player->angle + i, RADS)];
+	//	draw_line(info->map.back_buffer, start, (V2){endx, endy}, GREEN);
+	//}
+	//draw_line(info->map.back_buffer, start, end, YELLOW);
+	V2 p1 = next_point(info, (V2){player->x, player->y}, player->angle);
+	draw_circle(info->map.back_buffer, p1, 4, WHITE);
+	//V2 p1 = draw_points(info->map.back_buffer, info, player, (V2){player->x, player->y}, WHITE);
+	//V2 p2 = draw_points(info->map.back_buffer, info, player, p1, WHITE);
+	//V2 p3 = draw_points(info->map.back_buffer, info, player, p2, WHITE);
+	//V2 p4 = draw_points(info->map.back_buffer, info, player, p3, WHITE);
 }
 
 void	draw_player(void *param)
@@ -649,8 +777,8 @@ int	main(void)
 	mlx_key_hook(info.mlx, test, &info);
 	mlx_loop_hook(info.mlx, clear_background, &info);
 	mlx_loop_hook(info.mlx, draw_map, &info);
-	mlx_loop_hook(info.mlx, draw_player, &info);
 	mlx_loop_hook(info.mlx, draw_grid, &info);
+	mlx_loop_hook(info.mlx, draw_player, &info);
 	//mlx_loop_hook(info.mlx, draw_image, &info);
 	mlx_loop_hook(info.mlx, start_drawing, &info);
 	mlx_loop(info.mlx);

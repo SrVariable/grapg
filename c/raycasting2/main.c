@@ -143,7 +143,9 @@ int	get_y_length(Player *player, int distance, float angle)
  * Me he dado cuenta que el Bug #4, técnicamente los puntos los calculo bien,
  * pero el problema es que al quedarme con una longitud, sí que calculo mal
  * los puntos, pero si pintase tanto length_x como length_y pintaría todos
- * los puntos correctamente. Pero tengo que pensar cuándo renta pintar los dos
+ * los puntos correctamente.
+ * Creo que me puedo quedar con las dos longitudes, y simplemente pintar
+ * los que me renten
  */
 void	draw_n_points(Player *player, int n_points, float angle, Color color)
 {
@@ -159,41 +161,71 @@ void	draw_n_points(Player *player, int n_points, float angle, Color color)
 		}
 		printf("Calculated length_x %d: %f %f\n", i, player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
 		printf("Calculated length_y %d: %f %f\n", i, player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
-		DrawCircle(player->x + cos(angle) * length, player->y + sin(angle) * length, 2, color);
+		//DrawCircle(player->x + cos(angle) * length, player->y + sin(angle) * length, 2, color);
+		DrawCircle(player->x + cos(angle) * length_x, player->y + sin(angle) * length_x, 2, GetColor(0xFFAAAAAA));
+		DrawCircle(player->x + cos(angle) * length_y, player->y + sin(angle) * length_y, 2, GetColor(0xAAAAFFAA));
 	}
 }
 
 /**
+ * NOTA:
  * Al crear esta función me he dado cuenta que no calculo todos los puntos
  * pegados al grid
+ *
+ * NOTA:
+ * Creo que tengo que calcular la colisión del muro convirtiendo las
+ * coordenadas reales a coordenadas escaladas, es decir, si en el mapa
+ * hay un muro en (5, 5), entonces las coordenadas escaladas el muro
+ * empezaría en el (5 * PIXEL_SIZE, 5 * PIXEL_SIZE)
+ * y el muro tendría un tamaño de PIXEL_SIZE, entonces si el punto calculado
+ * está en ese punto, habría colisión y tendría que quedarme con el punto
+ * de colisión más cercano al jugador
  */
 Vector2	get_collided_point(Player *player, float angle, int map[16][16])
 {
 	Vector2 p = {0};
-	for (int i = 1; i < 5; ++i)
+	int i = 1;
+	bool keep_calculating = true;
+	while (keep_calculating)
 	{
 		int length_x = get_x_length(player, i, angle);
 		int length_y = get_y_length(player, i, angle);
-		int length = length_x;
-		if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
-			|| length_x == get_x_length(player, i + 1, angle))
-		{
-			length = length_y;
-		}
 		p = (Vector2){
-			player->x + cos(angle) * length,
-			player->y + sin(angle) * length
+			player->x + cos(angle) * length_x,
+			player->y + sin(angle) * length_x,
 		};
-		int x = p.x / PIXEL_SIZE;
-		int y = p.y / PIXEL_SIZE;
-		if (x >= 0 && x < 16 && y >= 0 && y < 16)
 		{
-			if (map[y][x] == 1)
+			int x = p.x / PIXEL_SIZE;
+			int y = p.y / PIXEL_SIZE;
+			if (x >= 0 && x < 16 && y >= 0 && y < 16)
 			{
-				printf("COLLIDE: %f %f | %d %d\n", p.x, p.y, x, y);
-				break;
+				if (map[y][x] == 1)
+				{
+					keep_calculating = false;
+				}
 			}
 		}
+		DrawCircleV(p, 2, YELLOW);
+		p = (Vector2){
+			player->x + cos(angle) * length_y,
+			player->y + sin(angle) * length_y,
+		};
+		{
+			int x = p.x / PIXEL_SIZE;
+			int y = p.y / PIXEL_SIZE;
+			if (x >= 0 && x < 16 && y >= 0 && y < 16)
+			{
+				if (map[y][x] == 1)
+				{
+					keep_calculating = false;
+				}
+			}
+		}
+		if (i++ == 2)
+		{
+			break;
+		}
+		DrawCircleV(p, 2, ORANGE);
 	}
 	return (p);
 }
@@ -208,9 +240,9 @@ int main(void)
 	//	.fov = 1,
 	//};
 	Player player = {
-		.x = 0.7 * PIXEL_SIZE,
-		.y = 1.2 * PIXEL_SIZE,
-		.angle = 50,
+		.x = 10 * PIXEL_SIZE,
+		.y = 11 * PIXEL_SIZE,
+		.angle = 45,
 		.size = 4,
 		.fov = 100,
 	};
@@ -234,7 +266,7 @@ int main(void)
 	};
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycasting2");
 	SetTargetFPS(60);
-	int n_points = 3;
+	int n_points = 1;
 	float time = 0;
 	bool is_paused = true;
 	while (!WindowShouldClose())
@@ -304,7 +336,7 @@ int main(void)
 		printf("Player: %f %f | Scaled: %f %f\n", player.x, player.y, player.x / PIXEL_SIZE, player.y / PIXEL_SIZE);
 		printf("Ray end: %f %f | Scaled: %f %f | Expected: %d %d\n", player.ray.x, player.ray.y, player.ray.x / PIXEL_SIZE, player.ray.y / PIXEL_SIZE, (int)(player.x / PIXEL_SIZE) + 1, (int)(player.y / PIXEL_SIZE) + 1);
 		printf("Angle: %f\n", player.angle);
-		DrawLine(player.x, player.y, player.ray.x, player.ray.y, GetColor(0xFFFFFFFF));
+		//DrawLine(player.x, player.y, player.ray.x, player.ray.y, GetColor(0xFFFFFFFF));
 
 		//Vector2 lray = {
 		//	.x = player.x + cos(DEG_TO_RADS(proper_mod(player.angle - 15, 360))) * player.fov,
@@ -364,8 +396,8 @@ int main(void)
 		//	draw_n_points(&player, n_points, DEG_TO_RADS(player.angle - i), SKYBLUE);
 		//}
 		draw_n_points(&player, n_points, DEG_TO_RADS(player.angle), YELLOW);
-		//Vector2 p = get_collided_point(&player, DEG_TO_RADS(player.angle), map);
-		//DrawCircleV(p, 2, RED);
+		Vector2 p = get_collided_point(&player, DEG_TO_RADS(player.angle), map);
+		DrawCircleV(p, 2, RED);
 		EndDrawing();
 	}
 	CloseWindow();

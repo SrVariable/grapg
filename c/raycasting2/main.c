@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define PIXEL_SIZE 128
-#define RESIZE 0.5
+#define PIXEL_SIZE 32
+#define RESIZE 2
 #define SCREEN_WIDTH ((PIXEL_SIZE) * 16 * (RESIZE))
 #define SCREEN_HEIGHT ((PIXEL_SIZE) * 9 * (RESIZE))
 #define CIRCLE_SIZE 3
@@ -88,25 +88,61 @@ int main(void)
 		printf("Player: %f %f | %f %f\n", player.x, player.y, player.x / PIXEL_SIZE, player.y / PIXEL_SIZE);
 		printf("Ray end: %f %f | %f %f || %d %d\n", player.ray.x, player.ray.y, player.ray.x / PIXEL_SIZE, player.ray.y / PIXEL_SIZE, (int)(player.x / PIXEL_SIZE) + 1, (int)(player.y / PIXEL_SIZE) + 1);
 		DrawLine(player.x, player.y, player.ray.x, player.ray.y, YELLOW);
-		// Thinking:
-		// La siguiente posición siempre es
-		// (int)(player.x/PIXEL_SIZE) + 1
 
-		// Esto sirve para la X
+		/**
+		 * Thinking:
+		 * La siguiente posición siempre es
+		 * (int)(player.x/PIXEL_SIZE) + 1
+		 */
+		//{
+		//	int saved = -1;
+		//	for (int i = 0; i < 1000; ++i)
+		//	{
+		//		int expected = (int)(player.x / PIXEL_SIZE) + 1;
+		//		int scaled = (player.x + cos(DEG_TO_RADS(player.angle)) * i) / PIXEL_SIZE;
+		//		if (scaled >= expected)
+		//		{
+		//			saved = i;
+		//			break;
+		//		}
+		//	}
+		//	printf("%f: %d -> %f\n", player.angle, saved, player.x + cos(DEG_TO_RADS(player.angle)) * saved);
+		//	DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, GetColor(0xAAAAAAFF));
+		//}
+
+		/**
+		 * Fórmula: x + cos(a) * i
+		 *
+		 * Donde la posición del jugador es:
+		 * x + cos(a) * 0 = x
+		 *
+		 * Y lo que quiero obtener es
+		 *
+		 * x + cos(a) * i = expected;
+		 * i = (expected - x) / cos(a)
+		 *
+		 * El único problema está cuando cos(a) == 0
+		 *
+		 * NOTA: Esto no me da exactamente el punto de colisión, pero sí una
+		 * aproximación, quizá es porque no he hecho bien los cálculos, pero
+		 * supongo que ya me daré cuenta más adelante
+		 */
 		{
-			int saved = -1;
-			for (int i = 0; i < 1000; ++i)
+			int length = -1;
+			if (cos(DEG_TO_RADS(player.angle)) != 0)
 			{
-				int expected = (int)(player.x / PIXEL_SIZE) + 1;
-				int scaled = (player.x + cos(DEG_TO_RADS(player.angle)) * i) / PIXEL_SIZE;
-				if (scaled >= expected)
+				if (cos(DEG_TO_RADS(player.angle)) > 0)
 				{
-					saved = i;
-					break;
+					length = ((int)(player.x / PIXEL_SIZE + 1) * PIXEL_SIZE - player.x);
 				}
+				else
+				{
+					length = ((int)(player.x / PIXEL_SIZE) * PIXEL_SIZE - player.x);
+				}
+				length /= cos(DEG_TO_RADS(player.angle));
 			}
-			printf("%f: %d\n", player.angle, saved);
-			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, WHITE);
+			printf("step: %d\n", length);
+			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * length, player.y + sin(DEG_TO_RADS(player.angle)) * length, 3, GetColor(0xFFBBFFFF));
 		}
 
 		// Esto sirve para la Y
@@ -122,7 +158,7 @@ int main(void)
 					break;
 				}
 			}
-			printf("%f: %d\n", player.angle, saved);
+			printf("%f: %d -> %f\n", player.angle, saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved);
 			DrawCircle(player.x + cos(DEG_TO_RADS(player.angle)) * saved, player.y + sin(DEG_TO_RADS(player.angle)) * saved, 3, BLUE);
 		}
 		EndDrawing();

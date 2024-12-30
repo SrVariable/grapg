@@ -28,6 +28,7 @@ mlx:
 clean:
 	rm -f animation/animation
 	rm -f raycasting/raycasting
+	rm -f raycasting2/raycasting
 	make fclean -C ./include/BFL
 	make clean -C ./include/MLX42/build
 

@@ -146,24 +146,35 @@ int	get_y_length(Player *player, int distance, float angle)
  * los puntos correctamente.
  * Creo que me puedo quedar con las dos longitudes, y simplemente pintar
  * los que me renten
+ *
+ * NOTA:
+ * Me acabo de dar cuenta que solo necesito conseguir 2 distancias con las
+ * funciones get_length, y la diferencia entre estas es el factor por el
+ * que tengo que multiplicarlas, sigo teniendo el mismo problema pero
+ * reduzco el número de llamadas a get_*_length
  */
 void	draw_n_points(Player *player, int n_points, float angle, Color color)
 {
-	for (int i = 1; i <= n_points; ++i)
+	int length_x1 = get_x_length(player, 1, angle);
+	int length_y1 = get_y_length(player, 1, angle);
+
+	int length_x2 = get_x_length(player, 2, angle);
+	int length_y2 = get_y_length(player, 2, angle);
+
+	int factor_x = length_x2 - length_x1;
+	int factor_y = length_y2 - length_y1;
+	for (int i = 0; i < n_points; ++i)
 	{
-		int length_x = get_x_length(player, i, angle);
-		int length_y = get_y_length(player, i, angle);
-		int length = length_x;
-		if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
-			|| length_x == get_x_length(player, i + 1, angle))
-		{
-			length = length_y;
-		}
-		printf("Calculated length_x %d: %f %f\n", i, player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
-		printf("Calculated length_y %d: %f %f\n", i, player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
+		//int length = length_x; if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
+		//	|| length_x == get_x_length(player, i + 1, angle))
+		//{
+		//	length = length_y;
+		//}
+		//printf("Calculated length_x %d: %f %f\n", i, player->x + cos(angle) * length_x, player->y + sin(angle) * length_x);
+		//printf("Calculated length_y %d: %f %f\n", i, player->x + cos(angle) * length_y, player->y + sin(angle) * length_y);
 		//DrawCircle(player->x + cos(angle) * length, player->y + sin(angle) * length, 2, color);
-		DrawCircle(player->x + cos(angle) * length_x, player->y + sin(angle) * length_x, 2, GetColor(0xFFAAAAAA));
-		DrawCircle(player->x + cos(angle) * length_y, player->y + sin(angle) * length_y, 2, GetColor(0xAAAAFFAA));
+		DrawCircle(player->x + cos(angle) * (length_x1 + factor_x * i), player->y + sin(angle) * (length_x1 + factor_x * i), 2, GetColor(0xFFAAAAAA));
+		DrawCircle(player->x + cos(angle) * (length_y1 + factor_y * i), player->y + sin(angle) * (length_y1 + factor_y * i), 2, GetColor(0xAAAAFFAA));
 	}
 }
 
@@ -186,13 +197,18 @@ Vector2	get_collided_point(Player *player, float angle, int map[16][16])
 	Vector2 p = {0};
 	int i = 1;
 	bool keep_calculating = true;
-	while (keep_calculating)
+	while (1)
 	{
 		int length_x = get_x_length(player, i, angle);
 		int length_y = get_y_length(player, i, angle);
+		int length = length_x; if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
+			|| length_x == get_x_length(player, i + 1, angle))
+		{
+			length = length_y;
+		}
 		p = (Vector2){
-			player->x + cos(angle) * length_x,
-			player->y + sin(angle) * length_x,
+			player->x + cos(angle) * length,
+			player->y + sin(angle) * length,
 		};
 		{
 			int x = p.x / PIXEL_SIZE;
@@ -201,31 +217,48 @@ Vector2	get_collided_point(Player *player, float angle, int map[16][16])
 			{
 				if (map[y][x] == 1)
 				{
-					keep_calculating = false;
+					break;
 				}
 			}
 		}
-		DrawCircleV(p, 2, YELLOW);
-		p = (Vector2){
-			player->x + cos(angle) * length_y,
-			player->y + sin(angle) * length_y,
-		};
-		{
-			int x = p.x / PIXEL_SIZE;
-			int y = p.y / PIXEL_SIZE;
-			if (x >= 0 && x < 16 && y >= 0 && y < 16)
-			{
-				if (map[y][x] == 1)
-				{
-					keep_calculating = false;
-				}
-			}
-		}
-		if (i++ == 2)
+
+		//p = (Vector2){
+		//	player->x + cos(angle) * length_x,
+		//	player->y + sin(angle) * length_x,
+		//};
+		//{
+		//	int x = p.x / PIXEL_SIZE;
+		//	int y = p.y / PIXEL_SIZE;
+		//	if (x >= 0 && x < 16 && y >= 0 && y < 16)
+		//	{
+		//		if (map[y][x] == 1)
+		//		{
+		//			keep_calculating = false;
+		//		}
+		//	}
+		//}
+		//DrawCircleV(p, 2, YELLOW);
+
+		//p = (Vector2){
+		//	player->x + cos(angle) * length_y,
+		//	player->y + sin(angle) * length_y,
+		//};
+		//{
+		//	int x = p.x / PIXEL_SIZE;
+		//	int y = p.y / PIXEL_SIZE;
+		//	if (x >= 0 && x < 16 && y >= 0 && y < 16)
+		//	{
+		//		if (map[y][x] == 1)
+		//		{
+		//			keep_calculating = false;
+		//		}
+		//	}
+		//}
+		if (i++ == 5)
 		{
 			break;
 		}
-		DrawCircleV(p, 2, ORANGE);
+		//DrawCircleV(p, 2, ORANGE);
 	}
 	return (p);
 }
@@ -266,7 +299,7 @@ int main(void)
 	};
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycasting2");
 	SetTargetFPS(60);
-	int n_points = 1;
+	int n_points = 3;
 	float time = 0;
 	bool is_paused = true;
 	while (!WindowShouldClose())
@@ -397,7 +430,7 @@ int main(void)
 		//}
 		draw_n_points(&player, n_points, DEG_TO_RADS(player.angle), YELLOW);
 		Vector2 p = get_collided_point(&player, DEG_TO_RADS(player.angle), map);
-		DrawCircleV(p, 2, RED);
+		//DrawCircleV(p, 2, RED);
 		EndDrawing();
 	}
 	CloseWindow();

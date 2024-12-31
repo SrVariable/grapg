@@ -31,7 +31,8 @@ int	proper_mod(int a, int b)
 }
 
 /**
- * Fórmula: x + cos(a) * i
+ * Fórmula:
+ * x + cos(a) * i
  *
  * Donde la posición del jugador es:
  * x + cos(a) * 0 = x
@@ -43,29 +44,37 @@ int	proper_mod(int a, int b)
  *
  * El único problema está cuando cos(a) == 0
  *
- * NOTA: Esto no me da exactamente el punto de colisión, pero sí una
+ * NOTA:
+ * Esto no me da exactamente el punto de colisión, pero sí una
  * aproximación, quizá es porque no he hecho bien los cálculos, pero
  * supongo que ya me daré cuenta más adelante
+ *
+ * NOTA:
+ * He modificado la comprobación de la división entre 0, porque lo estaba
+ * haciendo igualmente, ahora compruebo si el ángulo es 90 o 270, ya que
+ * son los que dan 0 al calcular su coseno
  */
 
 // Calculates the length of the next distance from X axis
 int	get_x_length(Player *player, int distance, float angle)
 {
+	if (((int)(angle * 180 / PI)) == 90
+		|| ((int)(angle * 180 / PI)) == 270)
+	{
+		return (0);
+	}
 	int length = 0;
 	--distance;
-	if (cos(angle) != 0)
+	int expected = 0;
+	if (cos(angle) > 0)
 	{
-		int expected = 0;
-		if (cos(angle) > 0)
-		{
-			expected = (int)(player->x / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
-		}
-		else
-		{
-			expected = (int)(player->x / PIXEL_SIZE - distance) * PIXEL_SIZE;
-		}
-		length = (expected - player->x) / cos(angle);
+		expected = (int)(player->x / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
 	}
+	else
+	{
+		expected = (int)(player->x / PIXEL_SIZE - distance) * PIXEL_SIZE;
+	}
+	length = (expected - player->x) / cos(angle);
 	return (length);
 }
 
@@ -76,21 +85,23 @@ int	get_x_length(Player *player, int distance, float angle)
 // Calculates the length of the next distance from Y axis
 int	get_y_length(Player *player, int distance, float angle)
 {
+	if (((int)(angle * 180 / PI)) == 0
+		|| ((int)(angle * 180 / PI)) == 180)
+	{
+		return (0);
+	}
 	int length = 0;
 	--distance;
-	if (sin(angle) != 0)
+	int expected = 0;
+	if (sin(angle) > 0)
 	{
-		int expected = 0;
-		if (sin(angle) > 0)
-		{
-			expected = (int)(player->y / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
-		}
-		else
-		{
-			expected = (int)(player->y / PIXEL_SIZE - distance) * PIXEL_SIZE;
-		}
-		length = (expected - player->y) / sin(angle);
+		expected = (int)(player->y / PIXEL_SIZE + 1 + distance) * PIXEL_SIZE + 1;
 	}
+	else
+	{
+		expected = (int)(player->y / PIXEL_SIZE - distance) * PIXEL_SIZE;
+	}
+	length = (expected - player->y) / sin(angle);
 	return (length);
 }
 
@@ -165,6 +176,8 @@ void	draw_n_points(Player *player, int n_points, float angle, Color color)
 	int factor_y = length_y2 - length_y1;
 	for (int i = 0; i < n_points; ++i)
 	{
+		//int length_x = get_x_length(player, i + 1, angle);
+		//int length_y = get_y_length(player, i + 1, angle);
 		//int length = length_x; if ((length_y < length_x && length_y != get_y_length(player, i + 1, angle))
 		//	|| length_x == get_x_length(player, i + 1, angle))
 		//{
